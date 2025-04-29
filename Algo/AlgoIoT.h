@@ -23,8 +23,7 @@
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * See the License governing permissions and limitations under the License.
  * */
 
 
@@ -80,6 +79,9 @@
 
 #define HTTP_CONNECT_TIMEOUT_MS 5000UL
 #define HTTP_QUERY_TIMEOUT_S 5
+
+#define ALGORAND_ASSET_TRANSFER_MIN_FIELDS 8 // Fields for asset transfer transaction
+#define DEFAULT_ASSET_ID 733709260 // Default asset ID to use for asset transfers
 
 
 // Error codes
@@ -166,6 +168,19 @@ class AlgoIoT
   // Returns HTTP response code (200 = OK)
   int submitTransaction(msgPack msgPackTx); 
 
+  // Prepares an asset transfer transaction MessagePack for opt-in
+  // Returns error code (0 = OK)
+  int prepareAssetTransferMessagePack(msgPack msgPackTx,
+                                  const uint32_t lastRound, 
+                                  const uint16_t fee,
+                                  const uint64_t assetId);
+                                  
+  // Debug function to print MessagePack content
+  void debugPrintMessagePack(msgPack msgPackTx);
+
+  // Prints transaction data in a readable string format
+  void printTransactionData(msgPack msgPackTx);
+
 
   public:
 
@@ -226,6 +241,10 @@ class AlgoIoT
   // Submit transaction to Algorand network
   // Return: error code (0 = OK)
   int submitTransactionToAlgorand();
+
+  // Submit asset opt-in transaction to Algorand network
+  // Return: error code (0 = OK)
+  int submitAssetOptInToAlgorand(uint64_t assetId = DEFAULT_ASSET_ID);
 };
 
 #endif

@@ -379,6 +379,43 @@ int msgpackAddUInt32(msgPack mPack, const uint32_t value)
 }
 
 
+// Fix the UInt64 implementation to ensure it's correctly encoding the value
+int msgpackAddUInt64(msgPack mPack, const uint64_t value)
+{
+  const uint8_t specifier = 0xCF;
+
+  if (mPack == NULL)
+  {
+    return MPK_ERR_NULL_MPACK;
+  }
+  if (mPack->msgBuffer == NULL)
+  {
+    return MPK_ERR_NULL_INTERNAL_BUFFER;
+  }
+  if (mPack->currentPosition + 9 >= mPack->bufferLen)
+  {
+    return MPK_ERR_BUFFER_TOO_SHORT;
+  }
+
+  // We use "uint 64" encoding https://github.com/msgpack/msgpack/blob/master/spec.md#int-format-family
+  mPack->msgBuffer[mPack->currentPosition++] = specifier;
+  
+  // Add value bytes (big-endian)
+  mPack->msgBuffer[mPack->currentPosition++] = (uint8_t)((value >> 56) & 0xFF);
+  mPack->msgBuffer[mPack->currentPosition++] = (uint8_t)((value >> 48) & 0xFF);
+  mPack->msgBuffer[mPack->currentPosition++] = (uint8_t)((value >> 40) & 0xFF);
+  mPack->msgBuffer[mPack->currentPosition++] = (uint8_t)((value >> 32) & 0xFF);
+  mPack->msgBuffer[mPack->currentPosition++] = (uint8_t)((value >> 24) & 0xFF);
+  mPack->msgBuffer[mPack->currentPosition++] = (uint8_t)((value >> 16) & 0xFF);
+  mPack->msgBuffer[mPack->currentPosition++] = (uint8_t)((value >> 8) & 0xFF);
+  mPack->msgBuffer[mPack->currentPosition++] = (uint8_t)(value & 0xFF);
+
+  mPack->currentMsgLen += 9;
+
+  return 0;
+}
+
+
 int msgpackAddFloat(msgPack mPack, const float value)
 {
   const uint8_t specifier = 0xCA;

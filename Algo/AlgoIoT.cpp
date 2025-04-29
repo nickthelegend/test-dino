@@ -21,8 +21,7 @@
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.*/
+ */
 
 
 #include <stdlib.h>
@@ -459,6 +458,12 @@ int AlgoIoT::submitTransactionToAlgorand()
   DEBUG_SERIAL.println("\nReady to submit transaction to Algorand network");
   DEBUG_SERIAL.println();
   #endif
+  
+  // Print transaction data in readable format
+  #ifdef LIB_DEBUGMODE
+  printTransactionData(msgPackTx);
+  #endif
+  
   iErr = submitTransaction(msgPackTx); // Returns HTTP code
   if (iErr != 200)  // 200 = HTTP OK
   { // Something went wrong
@@ -474,6 +479,619 @@ int AlgoIoT::submitTransactionToAlgorand()
   return ALGOIOT_NO_ERROR;
 }
 
+// Add this implementation after the existing submitTransactionToAlgorand method
+
+// Submit asset opt-in transaction to Algorand network
+// Return: error code (0 = OK)
+int AlgoIoT::submitAssetOptInToAlgorand(uint64_t assetId)
+{
+  uint32_t fv = 0;
+  uint16_t fee = 0;
+  int iErr = 0;
+  uint8_t signature[ALGORAND_SIG_BYTES];
+  uint8_t transactionMessagePackBuffer[ALGORAND_MAX_TX_MSGPACK_SIZE];
+  char transactionID[ALGORAND_TRANSACTIONID_SIZE + 1];
+  msgPack msgPackTx = NULL;
+
+  // Get current Algorand parameters
+  int httpResCode = getAlgorandTxParams(&fv, &fee);
+  if (httpResCode != 200)
+  {
+    return ALGOIOT_NETWORK_ERROR;
+  }
+
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nPreparing asset opt-in transaction for asset ID: %llu\n", assetId);
+  DEBUG_SERIAL.printf("First valid round: %u, Fee: %u\n", fv, fee);
+  #endif
+
+  // Prepare transaction structure as MessagePack
+  msgPackTx = msgpackInit(&(transactionMessagePackBuffer[0]), ALGORAND_MAX_TX_MSGPACK_SIZE);
+  if (msgPackTx == NULL)  
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.println("\n Error initializing transaction MessagePack\n");
+    #endif
+    return ALGOIOT_MESSAGEPACK_ERROR;
+  }  
+  
+  iErr = prepareAssetTransferMessagePack(msgPackTx, fv, fee, assetId);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d preparing asset transfer MessagePack\n", iErr);
+    #endif
+    return ALGOIOT_MESSAGEPACK_ERROR;
+  }
+
+  // Debug print the MessagePack content
+  #ifdef LIB_DEBUGMODE
+  debugPrintMessagePack(msgPackTx);
+  #endif
+
+  // Asset transfer transaction correctly assembled. Now sign it
+  iErr = signMessagePackAddingPrefix(msgPackTx, &(signature[0]));
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d signing MessagePack\n", iErr);
+    #endif
+    return ALGOIOT_SIGNATURE_ERROR;
+  }
+
+  // Signed OK: now compose payload
+  iErr = createSignedBinaryTransaction(msgPackTx, signature);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d creating signed binary transaction\n", iErr);
+    #endif
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  }
+
+  // Debug print the final signed MessagePack
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nSigned MessagePack content:");
+  debugPrintMessagePack(msgPackTx);
+  
+  // Payload ready. Now we can submit it via algod REST API
+  DEBUG_SERIAL.println("\nReady to submit asset opt-in transaction to Algorand network");
+  #endif
+  
+  // Print transaction data in readable format
+  #ifdef LIB_DEBUGMODE
+  printTransactionData(msgPackTx);
+  #endif
+  
+  iErr = submitTransaction(msgPackTx); // Returns HTTP code
+  if (iErr != 200)  // 200 = HTTP OK
+  { // Something went wrong
+    return ALGOIOT_TRANSACTION_ERROR;
+  }
+  
+  // OK: our transaction for asset opt-in was successfully submitted to the Algorand blockchain
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.print("\t Asset opt-in transaction successfully submitted with ID=");
+  DEBUG_SERIAL.println(getTransactionID());
+  #endif
+  
+  return ALGOIOT_NO_ERROR;
+}
+
+// Prepares an asset transfer transaction MessagePack for opt-in
+// Returns error code (0 = OK)
+int AlgoIoT::prepareAssetTransferMessagePack(msgPack msgPackTx,
+                                  const uint32_t lastRound, 
+                                  const uint16_t fee,
+                                  const uint64_t assetId)
+{ 
+  int iErr = 0;
+  char gen[ALGORAND_NETWORK_ID_CHARS + 1] = "";
+  uint32_t lv = lastRound + ALGORAND_MAX_WAIT_ROUNDS;
+  const char type[] = "axfer";
+  uint8_t nFields = ALGORAND_ASSET_TRANSFER_MIN_FIELDS;
+
+  if (msgPackTx == NULL)
+    return ALGOIOT_NULL_POINTER_ERROR;
+  if (msgPackTx->msgBuffer == NULL)
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  if ((lastRound == 0) || (fee == 0))
+  {
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  }
+  
+  if (m_networkType == ALGORAND_TESTNET)
+  { // TestNet
+    strncpy(gen, ALGORAND_TESTNET_ID, ALGORAND_NETWORK_ID_CHARS);
+    // Decode Algorand network hash
+    iErr = decodeAlgorandNetHash(ALGORAND_TESTNET_HASH, m_netHash);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d decoding Algorand network hash\n\n", iErr);
+      #endif
+      return ALGOIOT_INTERNAL_GENERIC_ERROR;
+    }
+  }
+  else
+  { // MainNet
+    strncpy(gen, ALGORAND_MAINNET_ID, ALGORAND_NETWORK_ID_CHARS);
+    iErr = decodeAlgorandNetHash(ALGORAND_MAINNET_HASH, m_netHash);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d decoding Algorand network hash\n\n", iErr);
+      #endif
+      return ALGOIOT_INTERNAL_GENERIC_ERROR;
+    }
+  }
+  gen[ALGORAND_NETWORK_ID_CHARS] = '\0';
+
+  // We leave a blank space header so we can add:
+  // - "TX" prefix before signing
+  // - m_signature field and "txn" node field after signing
+  iErr = msgPackModifyCurrentPosition(msgPackTx, BLANK_MSGPACK_HEADER);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d from msgPackModifyCurrentPosition()\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // Add root map
+  iErr = msgpackAddShortMap(msgPackTx, nFields); 
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding root map\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // Fields must follow alphabetical order
+
+  // "arcv" label (asset receiver - same as sender for opt-in)
+  iErr = msgpackAddShortString(msgPackTx, "arcv");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding arcv label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // arcv value (binary buffer) - same as sender for opt-in
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);  
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding arcv value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "fee" label
+  iErr = msgpackAddShortString(msgPackTx, "fee");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding fee label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // fee value
+  iErr = msgpackAddUInt16(msgPackTx, fee);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding fee value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "fv" label
+  iErr = msgpackAddShortString(msgPackTx, "fv");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding fv label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // fv value
+  iErr = msgpackAddUInt32(msgPackTx, lastRound);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding fv value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "gen" label
+  iErr = msgpackAddShortString(msgPackTx, "gen");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding gen label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // gen string
+  iErr = msgpackAddShortString(msgPackTx, gen);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding gen string\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "gh" label
+  iErr = msgpackAddShortString(msgPackTx, "gh");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding gh label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // gh value (binary buffer)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_netHash[0]), (const uint8_t)ALGORAND_NET_HASH_BYTES);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding gh value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "lv" label
+  iErr = msgpackAddShortString(msgPackTx, "lv");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding lv label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // lv value
+  iErr = msgpackAddUInt32(msgPackTx, lv);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding lv value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "snd" label
+  iErr = msgpackAddShortString(msgPackTx, "snd");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding snd label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // snd value (binary buffer)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);  
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding snd value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "type" label
+  iErr = msgpackAddShortString(msgPackTx, "type");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding type label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // type string
+  iErr = msgpackAddShortString(msgPackTx, "axfer");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding type string\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "xaid" label
+  iErr = msgpackAddShortString(msgPackTx, "xaid");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding xaid label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // xaid value - use UInt32 if the asset ID fits, otherwise use UInt64
+  if (assetId <= UINT32_MAX) {
+    iErr = msgpackAddUInt32(msgPackTx, (uint32_t)assetId);
+  } else {
+    iErr = msgpackAddUInt64(msgPackTx, assetId);
+  }
+  
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding xaid value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // End of messagepack
+  return 0;
+}
+
+// Debug function to print MessagePack content in hexadecimal format
+void AlgoIoT::debugPrintMessagePack(msgPack msgPackTx) {
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nMessagePack content (hex):");
+  for (uint32_t i = 0; i < msgPackTx->currentMsgLen; i++) {
+    DEBUG_SERIAL.printf("%02X ", msgPackTx->msgBuffer[i]);
+    if ((i + 1) % 16 == 0) {
+      DEBUG_SERIAL.println();
+    }
+  }
+  DEBUG_SERIAL.println("\n");
+  #endif
+}
+
+// Prints transaction data in a readable string format
+void AlgoIoT::printTransactionData(msgPack msgPackTx) {
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\n----- TRANSACTION DATA (READABLE FORMAT) -----");
+  
+  // Skip to the transaction content (after header or after "txn" field if signed)
+  uint32_t startPos = 0;
+  bool isSigned = false;
+  
+  // Check if this is a signed transaction (has "sig" and "txn" fields)
+  for (uint32_t i = 0; i < 20 && i < msgPackTx->currentMsgLen; i++) {
+    // Look for "sig" string in the first few bytes
+    if (i + 3 < msgPackTx->currentMsgLen && 
+        msgPackTx->msgBuffer[i] == 's' && 
+        msgPackTx->msgBuffer[i+1] == 'i' && 
+        msgPackTx->msgBuffer[i+2] == 'g') {
+      isSigned = true;
+      break;
+    }
+  }
+  
+  if (isSigned) {
+    // For signed transactions, find the "txn" field
+    for (uint32_t i = 0; i < msgPackTx->currentMsgLen - 3; i++) {
+      if (msgPackTx->msgBuffer[i] == 't' && 
+          msgPackTx->msgBuffer[i+1] == 'x' && 
+          msgPackTx->msgBuffer[i+2] == 'n') {
+        startPos = i + 3; // Skip past "txn"
+        break;
+      }
+    }
+  } else {
+    // For unsigned transactions, start after the header
+    startPos = BLANK_MSGPACK_HEADER;
+  }
+  
+  // Parse and print transaction fields
+  DEBUG_SERIAL.println("Transaction Fields:");
+  
+  // Transaction type
+  for (uint32_t i = startPos; i < msgPackTx->currentMsgLen - 4; i++) {
+    if (msgPackTx->msgBuffer[i] == 't' && 
+        msgPackTx->msgBuffer[i+1] == 'y' && 
+        msgPackTx->msgBuffer[i+2] == 'p' && 
+        msgPackTx->msgBuffer[i+3] == 'e') {
+      // Find the type value (usually "pay" or "axfer")
+      char typeStr[10] = {0};
+      uint8_t typeLen = 0;
+      
+      // Skip to the value (usually 5 bytes after "type")
+      i += 5;
+      
+      // Copy the string value
+      while (i < msgPackTx->currentMsgLen && typeLen < 9 && 
+             msgPackTx->msgBuffer[i] >= 32 && msgPackTx->msgBuffer[i] <= 126) {
+        typeStr[typeLen++] = msgPackTx->msgBuffer[i++];
+      }
+      
+      DEBUG_SERIAL.printf("  Type: %s\n", typeStr);
+      break;
+    }
+  }
+  
+  // Fee
+  for (uint32_t i = startPos; i < msgPackTx->currentMsgLen - 3; i++) {
+    if (msgPackTx->msgBuffer[i] == 'f' && 
+        msgPackTx->msgBuffer[i+1] == 'e' && 
+        msgPackTx->msgBuffer[i+2] == 'e') {
+      // Fee is usually encoded as a uint16, so look for the value 2-3 bytes after "fee"
+      uint16_t fee = 0;
+      
+      // Skip to the value (usually 3-4 bytes after "fee")
+      i += 4;
+      
+      // Simple extraction - this is a rough approximation
+      if (i+1 < msgPackTx->currentMsgLen) {
+        fee = (msgPackTx->msgBuffer[i] << 8) | msgPackTx->msgBuffer[i+1];
+        DEBUG_SERIAL.printf("  Fee: %u microAlgos\n", fee);
+      }
+      break;
+    }
+  }
+  
+  // First valid round (fv)
+  for (uint32_t i = startPos; i < msgPackTx->currentMsgLen - 2; i++) {
+    if (msgPackTx->msgBuffer[i] == 'f' && 
+        msgPackTx->msgBuffer[i+1] == 'v') {
+      // fv is usually encoded as a uint32, so look for the value 2-3 bytes after "fv"
+      uint32_t fv = 0;
+      
+      // Skip to the value (usually 3-5 bytes after "fv")
+      i += 3;
+      
+      // Simple extraction - this is a rough approximation
+      if (i+3 < msgPackTx->currentMsgLen) {
+        fv = (msgPackTx->msgBuffer[i] << 24) | 
+             (msgPackTx->msgBuffer[i+1] << 16) | 
+             (msgPackTx->msgBuffer[i+2] << 8) | 
+             msgPackTx->msgBuffer[i+3];
+        DEBUG_SERIAL.printf("  First Valid Round: %u\n", fv);
+      }
+      break;
+    }
+  }
+  
+  // Last valid round (lv)
+  for (uint32_t i = startPos; i < msgPackTx->currentMsgLen - 2; i++) {
+    if (msgPackTx->msgBuffer[i] == 'l' && 
+        msgPackTx->msgBuffer[i+1] == 'v') {
+      // lv is usually encoded as a uint32, so look for the value 2-3 bytes after "lv"
+      uint32_t lv = 0;
+      
+      // Skip to the value (usually 3-5 bytes after "lv")
+      i += 3;
+      
+      // Simple extraction - this is a rough approximation
+      if (i+3 < msgPackTx->currentMsgLen) {
+        lv = (msgPackTx->msgBuffer[i] << 24) | 
+             (msgPackTx->msgBuffer[i+1] << 16) | 
+             (msgPackTx->msgBuffer[i+2] << 8) | 
+             msgPackTx->msgBuffer[i+3];
+        DEBUG_SERIAL.printf("  Last Valid Round: %u\n", lv);
+      }
+      break;
+    }
+  }
+  
+  // For asset transfers, print the asset ID
+  for (uint32_t i = startPos; i < msgPackTx->currentMsgLen - 4; i++) {
+    if (msgPackTx->msgBuffer[i] == 'x' && 
+        msgPackTx->msgBuffer[i+1] == 'a' && 
+        msgPackTx->msgBuffer[i+2] == 'i' && 
+        msgPackTx->msgBuffer[i+3] == 'd') {
+      // xaid could be uint32 or uint64
+      uint64_t assetId = 0;
+      
+      // Skip to the value
+      i += 5;
+      
+      // Check if it's a uint32 or uint64 by looking at the format byte
+      if (msgPackTx->msgBuffer[i-1] == 0xCE) {  // uint32 format
+        if (i+3 < msgPackTx->currentMsgLen) {
+          assetId = (uint32_t)((msgPackTx->msgBuffer[i] << 24) | 
+                   (msgPackTx->msgBuffer[i+1] << 16) | 
+                   (msgPackTx->msgBuffer[i+2] << 8) | 
+                   msgPackTx->msgBuffer[i+3]);
+        }
+      } else if (msgPackTx->msgBuffer[i-1] == 0xCF) {  // uint64 format
+        if (i+7 < msgPackTx->currentMsgLen) {
+          assetId = ((uint64_t)msgPackTx->msgBuffer[i] << 56) | 
+                    ((uint64_t)msgPackTx->msgBuffer[i+1] << 48) | 
+                    ((uint64_t)msgPackTx->msgBuffer[i+2] << 40) | 
+                    ((uint64_t)msgPackTx->msgBuffer[i+3] << 32) | 
+                    ((uint64_t)msgPackTx->msgBuffer[i+4] << 24) | 
+                    ((uint64_t)msgPackTx->msgBuffer[i+5] << 16) | 
+                    ((uint64_t)msgPackTx->msgBuffer[i+6] << 8) | 
+                    (uint64_t)msgPackTx->msgBuffer[i+7];
+        }
+      }
+      
+      DEBUG_SERIAL.printf("  Asset ID: %llu\n", assetId);
+      break;
+    }
+  }
+  
+  // For payment transactions, print the amount
+  for (uint32_t i = startPos; i < msgPackTx->currentMsgLen - 3; i++) {
+    if (msgPackTx->msgBuffer[i] == 'a' && 
+        msgPackTx->msgBuffer[i+1] == 'm' && 
+        msgPackTx->msgBuffer[i+2] == 't') {
+      // Amount could be encoded in various ways
+      uint32_t amount = 0;
+      
+      // Skip to the value
+      i += 4;
+      
+      // Simple extraction - this is a rough approximation
+      if (i < msgPackTx->currentMsgLen) {
+        // Check format byte
+        if (msgPackTx->msgBuffer[i-1] < 0x80) {  // positive fixint
+          amount = msgPackTx->msgBuffer[i-1];
+        } else if (msgPackTx->msgBuffer[i-1] == 0xCC) {  // uint8
+          amount = msgPackTx->msgBuffer[i];
+        } else if (msgPackTx->msgBuffer[i-1] == 0xCD) {  // uint16
+          amount = (msgPackTx->msgBuffer[i] << 8) | msgPackTx->msgBuffer[i+1];
+        } else if (msgPackTx->msgBuffer[i-1] == 0xCE) {  // uint32
+          amount = (msgPackTx->msgBuffer[i] << 24) | 
+                   (msgPackTx->msgBuffer[i+1] << 16) | 
+                   (msgPackTx->msgBuffer[i+2] << 8) | 
+                   msgPackTx->msgBuffer[i+3];
+        }
+        
+        DEBUG_SERIAL.printf("  Amount: %u microAlgos\n", amount);
+      }
+      break;
+    }
+  }
+  
+  // Print note field if present
+  for (uint32_t i = startPos; i < msgPackTx->currentMsgLen - 4; i++) {
+    if (msgPackTx->msgBuffer[i] == 'n' && 
+        msgPackTx->msgBuffer[i+1] == 'o' && 
+        msgPackTx->msgBuffer[i+2] == 't' && 
+        msgPackTx->msgBuffer[i+3] == 'e') {
+      
+      // Skip to the value
+      i += 5;
+      
+      // Check format byte to determine length
+      uint16_t noteLen = 0;
+      uint32_t noteStart = 0;
+      
+      if (msgPackTx->msgBuffer[i-1] == 0xC4) {  // bin 8 format
+        noteLen = msgPackTx->msgBuffer[i];
+        noteStart = i + 1;
+      } else if (msgPackTx->msgBuffer[i-1] == 0xC5) {  // bin 16 format
+        noteLen = (msgPackTx->msgBuffer[i] << 8) | msgPackTx->msgBuffer[i+1];
+        noteStart = i + 2;
+      }
+      
+      if (noteLen > 0 && noteStart + noteLen <= msgPackTx->currentMsgLen) {
+        DEBUG_SERIAL.print("  Note: ");
+        
+        // Print the note content as a string (if printable)
+        for (uint16_t j = 0; j < noteLen && j < 100; j++) {  // Limit to 100 chars
+          char c = msgPackTx->msgBuffer[noteStart + j];
+          if (c >= 32 && c <= 126) {  // Printable ASCII
+            DEBUG_SERIAL.print(c);
+          } else {
+            DEBUG_SERIAL.print('.');  // Replace non-printable with dot
+          }
+        }
+        
+        if (noteLen > 100) {
+          DEBUG_SERIAL.print("... (truncated)");
+        }
+        
+        DEBUG_SERIAL.println();
+      }
+      break;
+    }
+  }
+  
+  DEBUG_SERIAL.println("----- END TRANSACTION DATA -----\n");
+  #endif
+}
 
 ///////////////////////////
 //
@@ -1176,6 +1794,12 @@ int AlgoIoT::submitTransaction(msgPack msgPackTx)
   // Configure MIME type
   m_httpClient.addHeader("Content-Type", ALGORAND_POST_MIME_TYPE);
 
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nSubmitting transaction to: %s\n", httpRequest.c_str());
+  DEBUG_SERIAL.printf("Content-Type: %s\n", ALGORAND_POST_MIME_TYPE);
+  DEBUG_SERIAL.printf("Payload size: %d bytes\n", msgPackTx->currentMsgLen);
+  #endif
+
   int httpResponseCode = m_httpClient.POST(msgPackTx->msgBuffer, msgPackTx->currentMsgLen);
       
   // httpResponseCode will be negative on error
@@ -1199,12 +1823,18 @@ int AlgoIoT::submitTransaction(msgPack msgPackTx)
         {
           #ifdef LIB_DEBUGMODE
           DEBUG_SERIAL.println("JSON response parsing failed!");
+          DEBUG_SERIAL.println(payload);
           #endif
           return ALGOIOT_INTERNAL_GENERIC_ERROR;
         }
         else
         { // Fetch interesting fields                  
           strncpy(m_transactionID, JSONResDoc["txId"], 64);
+          
+          #ifdef LIB_DEBUGMODE
+          DEBUG_SERIAL.println("Server response:");
+          DEBUG_SERIAL.println(payload);
+          #endif
         }
       }
       break;
@@ -1231,6 +1861,9 @@ int AlgoIoT::submitTransaction(msgPack msgPackTx)
       {
         #ifdef LIB_DEBUGMODE
         DEBUG_SERIAL.print("\nUnmanaged HTTP response code "); DEBUG_SERIAL.println(httpResponseCode);
+        String payload = m_httpClient.getString();
+        DEBUG_SERIAL.println("Server response:");
+        DEBUG_SERIAL.println(payload);
         #endif
         return ALGOIOT_INTERNAL_GENERIC_ERROR;
       }
