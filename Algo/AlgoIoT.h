@@ -80,7 +80,7 @@
 #define HTTP_CONNECT_TIMEOUT_MS 5000UL
 #define HTTP_QUERY_TIMEOUT_S 5
 
-#define ALGORAND_ASSET_TRANSFER_MIN_FIELDS 9 // Fields for asset transfer transaction: arcv, fee, fv, gen, gh, lv, snd, type, xaid
+#define ALGORAND_ASSET_TRANSFER_MIN_FIELDS 10 // Fields for asset transfer transaction: aamt, arcv, fee, fv, gen, gh, lv, snd, type, xaid
 #define DEFAULT_ASSET_ID 733709260 // Default asset ID to use for asset transfers
 
 

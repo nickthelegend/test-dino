@@ -19,7 +19,7 @@
  *  http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
+ * is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  */
 
@@ -503,6 +503,9 @@ int AlgoIoT::submitAssetOptInToAlgorand(uint64_t assetId)
   #ifdef LIB_DEBUGMODE
   DEBUG_SERIAL.printf("\nPreparing asset opt-in transaction for asset ID: %llu\n", assetId);
   DEBUG_SERIAL.printf("First valid round: %u, Fee: %u\n", fv, fee);
+  DEBUG_SERIAL.printf("Sender address (first 8 bytes): %02X %02X %02X %02X %02X %02X %02X %02X\n", 
+                     m_senderAddressBytes[0], m_senderAddressBytes[1], m_senderAddressBytes[2], m_senderAddressBytes[3],
+                     m_senderAddressBytes[4], m_senderAddressBytes[5], m_senderAddressBytes[6], m_senderAddressBytes[7]);
   #endif
 
   // Prepare transaction structure as MessagePack
@@ -526,6 +529,7 @@ int AlgoIoT::submitAssetOptInToAlgorand(uint64_t assetId)
 
   // Debug print the MessagePack content
   #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nUnsigned MessagePack content:");
   debugPrintMessagePack(msgPackTx);
   #endif
 
@@ -538,6 +542,16 @@ int AlgoIoT::submitAssetOptInToAlgorand(uint64_t assetId)
     #endif
     return ALGOIOT_SIGNATURE_ERROR;
   }
+
+  // Debug print the signature
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nSignature (64 bytes):");
+  for (int i = 0; i < ALGORAND_SIG_BYTES; i++) {
+    DEBUG_SERIAL.printf("%02X ", signature[i]);
+    if ((i + 1) % 16 == 0) DEBUG_SERIAL.println();
+  }
+  DEBUG_SERIAL.println();
+  #endif
 
   // Signed OK: now compose payload
   iErr = createSignedBinaryTransaction(msgPackTx, signature);
@@ -645,7 +659,7 @@ int AlgoIoT::prepareAssetTransferMessagePack(msgPack msgPackTx,
 
   // IMPORTANT: Make sure we include the xaid field in the field count
   // Asset transfer requires 9 fields: arcv, fee, fv, gen, gh, lv, snd, type, xaid
-  nFields = 9;
+  nFields = 9;  // Change from 9 to 10 to include aamt field
   
   // Add root map
   iErr = msgpackAddShortMap(msgPackTx, nFields); 
