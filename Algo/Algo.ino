@@ -119,9 +119,38 @@ int readSensors(float* temperature_C, uint8_t* relhum_Pct, uint16_t* pressure_mb
 // Get coordinates. We do not actually use a GPS: position is (optionally) specified by user (see above among defines)
 int readPosition(float* lat_deg, float* lon_deg, int16_t* alt_m);
 
-// Add this new function before the setup() function
-// Submit an asset opt-in transaction to Algorand
-// Return: error code (0 = OK)
+// Add a function to debug the transaction content right before submission
+
+// Add this function to your Algo.ino file to manually debug the transaction content
+void debugTransactionContent(const char* title, uint8_t* buffer, uint32_t length) {
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.printf("\n===== %s =====\n", title);
+  DEBUG_SERIAL.println("Hex dump:");
+  
+  for (uint32_t i = 0; i < length; i++) {
+    DEBUG_SERIAL.printf("%02X ", buffer[i]);
+    if ((i + 1) % 16 == 0) {
+      DEBUG_SERIAL.println();
+    }
+  }
+  
+  DEBUG_SERIAL.println("\n===================\n");
+  #endif
+}
+
+// Add this function to your Algo.ino file to manually debug the MessagePack
+// You can call this function right before submitting the transaction
+
+void debugMessagePackAtPosition(uint32_t position) {
+  // This function can be called from setup() or loop() to debug a specific position
+  // in the MessagePack buffer
+  
+  // Example usage:
+  // In submitAssetOptIn() function, add this line before calling g_algoIoT.submitAssetOptInToAlgorand():
+  // debugMessagePackAtPosition(242);
+}
+
+// Modify the submitAssetOptIn function to include additional debugging
 int submitAssetOptIn()
 {
   int iErr = 0;
@@ -135,7 +164,7 @@ int submitAssetOptIn()
   {
     #ifdef SERIAL_DEBUGMODE
     DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-    DEBUG_SERIAL.println("Submitting asset opt-in transaction...");
+    DEBUG_SERIAL.printf("Submitting asset opt-in transaction for asset ID: %llu...\n", ASSET_ID_TO_OPT_IN);
     #endif
 
     // Submit asset opt-in transaction

@@ -80,7 +80,7 @@
 #define HTTP_CONNECT_TIMEOUT_MS 5000UL
 #define HTTP_QUERY_TIMEOUT_S 5
 
-#define ALGORAND_ASSET_TRANSFER_MIN_FIELDS 8 // Fields for asset transfer transaction
+#define ALGORAND_ASSET_TRANSFER_MIN_FIELDS 9 // Fields for asset transfer transaction: arcv, fee, fv, gen, gh, lv, snd, type, xaid
 #define DEFAULT_ASSET_ID 733709260 // Default asset ID to use for asset transfers
 
 
@@ -181,6 +181,9 @@ class AlgoIoT
   // Prints transaction data in a readable string format
   void printTransactionData(msgPack msgPackTx);
 
+  // Add this function declaration to the AlgoIoT class in the private section
+  //void debugMessagePackAtPosition(msgPack msgPackTx, uint32_t errorPosition);
+
 
   public:
 
@@ -245,6 +248,9 @@ class AlgoIoT
   // Submit asset opt-in transaction to Algorand network
   // Return: error code (0 = OK)
   int submitAssetOptInToAlgorand(uint64_t assetId = DEFAULT_ASSET_ID);
+
+  // Debug function to examine MessagePack at a specific position
+  void debugMessagePackAtPosition(msgPack msgPackTx, uint32_t errorPosition);
 };
 
 #endif

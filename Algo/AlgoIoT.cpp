@@ -600,6 +600,10 @@ int AlgoIoT::prepareAssetTransferMessagePack(msgPack msgPackTx,
     return ALGOIOT_INTERNAL_GENERIC_ERROR;
   }
   
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nPreparing asset transfer with asset ID: %llu\n", assetId);
+  #endif
+  
   if (m_networkType == ALGORAND_TESTNET)
   { // TestNet
     strncpy(gen, ALGORAND_TESTNET_ID, ALGORAND_NETWORK_ID_CHARS);
@@ -639,12 +643,16 @@ int AlgoIoT::prepareAssetTransferMessagePack(msgPack msgPackTx,
     return 5;
   }
 
+  // IMPORTANT: Make sure we include the xaid field in the field count
+  // Asset transfer requires 9 fields: arcv, fee, fv, gen, gh, lv, snd, type, xaid
+  nFields = 9;
+  
   // Add root map
   iErr = msgpackAddShortMap(msgPackTx, nFields); 
   if (iErr)
   {
     #ifdef LIB_DEBUGMODE
-    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding root map\n\n", iErr);
+    DEBUG_SERIAL.printf("\n prepareAssetTransferMessagePack(): ERROR %d adding root map with %d fields\n\n", iErr, nFields);
     #endif
     return 5;
   }
@@ -813,13 +821,12 @@ int AlgoIoT::prepareAssetTransferMessagePack(msgPack msgPackTx,
     return 5;
   }
   
-  // xaid value - use UInt32 if the asset ID fits, otherwise use UInt64
-  if (assetId <= UINT32_MAX) {
-    iErr = msgpackAddUInt32(msgPackTx, (uint32_t)assetId);
-  } else {
-    iErr = msgpackAddUInt64(msgPackTx, assetId);
-  }
+  // xaid value - ALWAYS use UInt64 for asset IDs
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nAdding asset ID: %llu as UInt64\n", assetId);
+  #endif
   
+  iErr = msgpackAddUInt64(msgPackTx, assetId);
   if (iErr)
   {
     #ifdef LIB_DEBUGMODE
@@ -827,6 +834,10 @@ int AlgoIoT::prepareAssetTransferMessagePack(msgPack msgPackTx,
     #endif
     return 5;
   }
+  
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nAsset transfer MessagePack preparation complete");
+  #endif
 
   // End of messagepack
   return 0;
@@ -1853,6 +1864,23 @@ int AlgoIoT::submitTransaction(msgPack msgPackTx)
         DEBUG_SERIAL.println("Server response:");
         String payload = m_httpClient.getString();
         DEBUG_SERIAL.println(payload);
+        
+        // Extract the position number from the error message if available
+        uint32_t errorPosition = 0;
+        if (payload.indexOf("pos ") >= 0) {
+          int posStart = payload.indexOf("pos ") + 4;
+          int posEnd = payload.indexOf("]", posStart);
+          if (posEnd > posStart) {
+            String posStr = payload.substring(posStart, posEnd);
+            errorPosition = posStr.toInt();
+            
+            // Debug the MessagePack at the error position
+            debugMessagePackAtPosition(msgPackTx, errorPosition);
+          }
+        } else {
+          // If we can't find a specific position, debug around position 242 (from your error)
+          debugMessagePackAtPosition(msgPackTx, 242);
+        }
         #endif
         return ALGOIOT_TRANSACTION_ERROR;
       }
@@ -1874,4 +1902,172 @@ int AlgoIoT::submitTransaction(msgPack msgPackTx)
   m_httpClient.end();
 
   return httpResponseCode;
+}
+
+// Also add a standalone function to manually debug the MessagePack at any point
+void debugMessagePackAtPos(msgPack msgPackTx, uint32_t position) {
+  #ifdef LIB_DEBUGMODE
+  AlgoIoT dummyInstance("debug", "shadow market lounge gauge battle small crash funny supreme regular obtain require control oil lend reward galaxy tuition elder owner flavor rural expose absent sniff");
+  dummyInstance.debugMessagePackAtPosition(msgPackTx, position);
+  #endif
+}
+
+// Add this debugging function to examine the MessagePack content at a specific position
+void AlgoIoT::debugMessagePackAtPosition(msgPack msgPackTx, uint32_t errorPosition) {
+  #ifdef LIB_DEBUGMODE
+  if (msgPackTx == NULL || msgPackTx->msgBuffer == NULL || errorPosition >= msgPackTx->currentMsgLen) {
+    DEBUG_SERIAL.println("Invalid parameters for debugging");
+    return;
+  }
+
+  // Define the range to examine (20 bytes before and after the error position)
+  uint32_t startPos = (errorPosition > 20) ? errorPosition - 20 : 0;
+  uint32_t endPos = (errorPosition + 20 < msgPackTx->currentMsgLen) ? errorPosition + 20 : msgPackTx->currentMsgLen - 1;
+
+  DEBUG_SERIAL.println("\n===== MESSAGEPACK DEBUG AT ERROR POSITION =====");
+  DEBUG_SERIAL.printf("Error reported at position: %u\n", errorPosition);
+  DEBUG_SERIAL.printf("Total MessagePack length: %u bytes\n", msgPackTx->currentMsgLen);
+  
+  // Print the byte at the error position
+  DEBUG_SERIAL.printf("Byte at position %u: 0x%02X (decimal: %u, ASCII: %c)\n", 
+                     errorPosition, 
+                     msgPackTx->msgBuffer[errorPosition],
+                     msgPackTx->msgBuffer[errorPosition],
+                     (msgPackTx->msgBuffer[errorPosition] >= 32 && msgPackTx->msgBuffer[errorPosition] <= 126) ? 
+                      (char)msgPackTx->msgBuffer[errorPosition] : '.');
+
+  // Print surrounding bytes in hex
+  DEBUG_SERIAL.println("\nSurrounding bytes (hex):");
+  for (uint32_t i = startPos; i <= endPos; i++) {
+    if (i == errorPosition) {
+      DEBUG_SERIAL.printf("[0x%02X] ", msgPackTx->msgBuffer[i]); // Highlight the error position
+    } else {
+      DEBUG_SERIAL.printf("0x%02X ", msgPackTx->msgBuffer[i]);
+    }
+    
+    // Add a newline every 8 bytes for readability
+    if ((i - startPos + 1) % 8 == 0) {
+      DEBUG_SERIAL.println();
+    }
+  }
+  DEBUG_SERIAL.println();
+
+  // Try to identify MessagePack format types around the error position
+  DEBUG_SERIAL.println("\nMessagePack format analysis:");
+  
+  // Check for common MessagePack format markers
+  for (uint32_t i = startPos; i <= endPos; i++) {
+    uint8_t byte = msgPackTx->msgBuffer[i];
+    String formatType = "";
+    
+    // Identify MessagePack format types based on the byte value
+    if (byte < 0x80) {
+      formatType = "positive fixint";
+    } else if (byte >= 0x80 && byte <= 0x8f) {
+      formatType = "fixmap (size " + String(byte & 0x0f) + ")";
+    } else if (byte >= 0x90 && byte <= 0x9f) {
+      formatType = "fixarray (size " + String(byte & 0x0f) + ")";
+    } else if (byte >= 0xa0 && byte <= 0xbf) {
+      formatType = "fixstr (length " + String(byte & 0x1f) + ")";
+    } else if (byte == 0xc0) {
+      formatType = "nil";
+    } else if (byte == 0xc2) {
+      formatType = "false";
+    } else if (byte == 0xc3) {
+      formatType = "true";
+    } else if (byte == 0xc4) {
+      formatType = "bin 8";
+    } else if (byte == 0xc5) {
+      formatType = "bin 16";
+    } else if (byte == 0xc6) {
+      formatType = "bin 32";
+    } else if (byte == 0xca) {
+      formatType = "float 32";
+    } else if (byte == 0xcb) {
+      formatType = "float 64";
+    } else if (byte == 0xcc) {
+      formatType = "uint 8";
+    } else if (byte == 0xcd) {
+      formatType = "uint 16";
+    } else if (byte == 0xce) {
+      formatType = "uint 32";
+    } else if (byte == 0xcf) {
+      formatType = "uint 64";
+    } else if (byte == 0xd0) {
+      formatType = "int 8";
+    } else if (byte == 0xd1) {
+      formatType = "int 16";
+    } else if (byte == 0xd2) {
+      formatType = "int 32";
+    } else if (byte == 0xd3) {
+      formatType = "int 64";
+    } else if (byte == 0xd9) {
+      formatType = "str 8";
+    } else if (byte == 0xda) {
+      formatType = "str 16";
+    } else if (byte == 0xdb) {
+      formatType = "str 32";
+    } else if (byte == 0xdc) {
+      formatType = "array 16";
+    } else if (byte == 0xdd) {
+      formatType = "array 32";
+    } else if (byte == 0xde) {
+      formatType = "map 16";
+    } else if (byte == 0xdf) {
+      formatType = "map 32";
+    } else if (byte >= 0xe0) {
+      formatType = "negative fixint";
+    }
+    
+    if (formatType != "") {
+      if (i == errorPosition) {
+        DEBUG_SERIAL.printf("Position %u: [0x%02X] - %s\n", i, byte, formatType.c_str());
+      } else {
+        DEBUG_SERIAL.printf("Position %u: 0x%02X - %s\n", i, byte, formatType.c_str());
+      }
+    }
+  }
+  
+  // Try to identify string fields near the error position
+  DEBUG_SERIAL.println("\nAttempting to identify string fields:");
+  for (uint32_t i = startPos; i <= endPos - 3; i++) {
+    // Look for fixstr format (0xa0-0xbf) or str8 format (0xd9)
+    if ((msgPackTx->msgBuffer[i] >= 0xa0 && msgPackTx->msgBuffer[i] <= 0xbf) || 
+        msgPackTx->msgBuffer[i] == 0xd9) {
+      
+      uint8_t strLen = 0;
+      uint32_t strStart = 0;
+      
+      if (msgPackTx->msgBuffer[i] >= 0xa0 && msgPackTx->msgBuffer[i] <= 0xbf) {
+        // fixstr format
+        strLen = msgPackTx->msgBuffer[i] & 0x1f;
+        strStart = i + 1;
+      } else if (msgPackTx->msgBuffer[i] == 0xd9) {
+        // str8 format
+        strLen = msgPackTx->msgBuffer[i+1];
+        strStart = i + 2;
+      }
+      
+      if (strLen > 0 && strStart + strLen <= endPos) {
+        String fieldName = "";
+        for (uint8_t j = 0; j < strLen; j++) {
+          char c = msgPackTx->msgBuffer[strStart + j];
+          if (c >= 32 && c <= 126) {  // Printable ASCII
+            fieldName += c;
+          } else {
+            fieldName += '.';  // Replace non-printable with dot
+          }
+        }
+        
+        DEBUG_SERIAL.printf("Position %u: String field \"%s\" (length %u)\n", 
+                           i, fieldName.c_str(), strLen);
+        
+        // Skip ahead past this string
+        i = strStart + strLen - 1;
+      }
+    }
+  }
+  
+  DEBUG_SERIAL.println("\n===== END MESSAGEPACK DEBUG =====");
+  #endif
 }
