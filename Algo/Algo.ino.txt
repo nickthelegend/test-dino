@@ -46,6 +46,9 @@
 // Assign your node serial number (will be added to Note data):
 #define NODE_SERIAL_NUMBER 1234567890UL
 
+// Add this define after the other defines in the USER-DEFINED SETTINGS section
+#define ASSET_ID_TO_OPT_IN 733709260UL  // Asset ID to opt into
+
 // Sample labels for your data:
 #define SN_LABEL "NodeSerialNum"
 #define T_LABEL "Temperature(°C)"
@@ -116,6 +119,75 @@ int readSensors(float* temperature_C, uint8_t* relhum_Pct, uint16_t* pressure_mb
 // Get coordinates. We do not actually use a GPS: position is (optionally) specified by user (see above among defines)
 int readPosition(float* lat_deg, float* lon_deg, int16_t* alt_m);
 
+// Add a function to debug the transaction content right before submission
+
+// Add this function to your Algo.ino file to manually debug the transaction content
+void debugTransactionContent(const char* title, uint8_t* buffer, uint32_t length) {
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.printf("\n===== %s =====\n", title);
+  DEBUG_SERIAL.println("Hex dump:");
+  
+  for (uint32_t i = 0; i < length; i++) {
+    DEBUG_SERIAL.printf("%02X ", buffer[i]);
+    if ((i + 1) % 16 == 0) {
+      DEBUG_SERIAL.println();
+    }
+  }
+  
+  DEBUG_SERIAL.println("\n===================\n");
+  #endif
+}
+
+// Add this function to your Algo.ino file to manually debug the MessagePack
+// You can call this function right before submitting the transaction
+
+void debugMessagePackAtPosition(uint32_t position) {
+  // This function can be called from setup() or loop() to debug a specific position
+  // in the MessagePack buffer
+  
+  // Example usage:
+  // In submitAssetOptIn() function, add this line before calling g_algoIoT.submitAssetOptInToAlgorand():
+  // debugMessagePackAtPosition(242);
+}
+
+// Modify the submitAssetOptIn function to include additional debugging
+int submitAssetOptIn()
+{
+  int iErr = 0;
+  
+  // Check for WiFi connection
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.print("Trying to connect to WiFi network for asset opt-in "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
+  #endif
+  
+  if((g_wifiMulti.run() == WL_CONNECTED)) 
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
+    DEBUG_SERIAL.printf("Submitting asset opt-in transaction for asset ID: %llu...\n", ASSET_ID_TO_OPT_IN);
+    #endif
+
+    // Submit asset opt-in transaction
+    iErr = g_algoIoT.submitAssetOptInToAlgorand(ASSET_ID_TO_OPT_IN);
+    if (iErr)
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Error %d submitting asset opt-in transaction\n", iErr);
+      #endif
+      return iErr;
+    }
+    else
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("\t*** Asset opt-in transaction successfully submitted with ID = %s ***\n\n", g_algoIoT.getTransactionID());
+      #endif
+      return 0;
+    }
+  }
+  
+  // WiFi connection not established
+  return ALGOIOT_NETWORK_ERROR;
+}
 
 
 //////////
@@ -172,6 +244,28 @@ void setup()
     waitForever();
   }
   #endif
+
+  
+  // Opt-in to the asset
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.println("Attempting to opt-in to asset...");
+  #endif
+  
+  iErr = submitAssetOptIn();
+  if (iErr != ALGOIOT_NO_ERROR)
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d opting into asset: please check network connection and asset ID\n\n", iErr);
+    #endif
+    // We don't call waitForever() here because we still want to proceed with sensor data transactions
+    // even if the asset opt-in fails
+  }
+  else
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.println("Successfully opted into asset!");
+    #endif
+  }
 }
 
 

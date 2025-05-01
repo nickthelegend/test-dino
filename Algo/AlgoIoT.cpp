@@ -835,12 +835,18 @@ int AlgoIoT::prepareAssetTransferMessagePack(msgPack msgPackTx,
     return 5;
   }
   
-  // xaid value - ALWAYS use UInt64 for asset IDs
+  // xaid value - Use UInt32 for asset IDs that fit in 32 bits to match Algo SDK encoding
   #ifdef LIB_DEBUGMODE
-  DEBUG_SERIAL.printf("\nAdding asset ID: %llu as UInt64\n", assetId);
+  DEBUG_SERIAL.printf("\nAdding asset ID: %llu\n", assetId);
   #endif
   
-  iErr = msgpackAddUInt64(msgPackTx, assetId);
+  // Check if the asset ID fits in a uint32
+  if (assetId <= 0xFFFFFFFF) {
+    iErr = msgpackAddUInt32(msgPackTx, (uint32_t)assetId);
+  } else {
+    iErr = msgpackAddUInt64(msgPackTx, assetId);
+  }
+  
   if (iErr)
   {
     #ifdef LIB_DEBUGMODE
