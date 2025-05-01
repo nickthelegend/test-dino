@@ -82,6 +82,8 @@
 
 #define ALGORAND_ASSET_TRANSFER_MIN_FIELDS 10 // Fields for asset transfer transaction: aamt, arcv, fee, fv, gen, gh, lv, snd, type, xaid
 #define DEFAULT_ASSET_ID 733709260 // Default asset ID to use for asset transfers
+#define ALGORAND_APPLICATION_OPTIN_MIN_FIELDS 9 // Fields for application opt-in: apan, apid, fee, fv, gen, gh, lv, snd, type
+#define DEFAULT_APPLICATION_ID 738608433 // Default application ID to use for application opt-ins
 
 
 // Error codes
@@ -184,6 +186,13 @@ class AlgoIoT
   // Add this function declaration to the AlgoIoT class in the private section
   //void debugMessagePackAtPosition(msgPack msgPackTx, uint32_t errorPosition);
 
+  // Prepares an application opt-in transaction MessagePack
+  // Returns error code (0 = OK)
+  int prepareApplicationOptInMessagePack(msgPack msgPackTx,
+                                  const uint32_t lastRound, 
+                                  const uint16_t fee,
+                                  const uint64_t applicationId);
+
 
   public:
 
@@ -248,6 +257,10 @@ class AlgoIoT
   // Submit asset opt-in transaction to Algorand network
   // Return: error code (0 = OK)
   int submitAssetOptInToAlgorand(uint64_t assetId = DEFAULT_ASSET_ID);
+
+  // Submit application opt-in transaction to Algorand network
+  // Return: error code (0 = OK)
+  int submitApplicationOptInToAlgorand(uint64_t applicationId = DEFAULT_APPLICATION_ID);
 
   // Debug function to examine MessagePack at a specific position
   void debugMessagePackAtPosition(msgPack msgPackTx, uint32_t errorPosition);

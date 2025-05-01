@@ -2091,3 +2091,382 @@ void AlgoIoT::debugMessagePackAtPosition(msgPack msgPackTx, uint32_t errorPositi
   DEBUG_SERIAL.println("\n===== END MESSAGEPACK DEBUG =====");
   #endif
 }
+
+// Add this implementation after the submitAssetOptInToAlgorand method
+
+// Submit application opt-in transaction to Algorand network
+// Return: error code (0 = OK)
+int AlgoIoT::submitApplicationOptInToAlgorand(uint64_t applicationId)
+{
+  uint32_t fv = 0;
+  uint16_t fee = 0;
+  int iErr = 0;
+  uint8_t signature[ALGORAND_SIG_BYTES];
+  uint8_t transactionMessagePackBuffer[ALGORAND_MAX_TX_MSGPACK_SIZE];
+  char transactionID[ALGORAND_TRANSACTIONID_SIZE + 1] = "";
+  msgPack msgPackTx = NULL;
+
+  // Get current Algorand parameters
+  int httpResCode = getAlgorandTxParams(&fv, &fee);
+  if (httpResCode != 200)
+  {
+    return ALGOIOT_NETWORK_ERROR;
+  }
+
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nPreparing application opt-in transaction for application ID: %llu\n", applicationId);
+  DEBUG_SERIAL.printf("First valid round: %u, Fee: %u\n", fv, fee);
+  DEBUG_SERIAL.printf("Sender address (first 8 bytes): %02X %02X %02X %02X %02X %02X %02X %02X\n", 
+                     m_senderAddressBytes[0], m_senderAddressBytes[1], m_senderAddressBytes[2], m_senderAddressBytes[3],
+                     m_senderAddressBytes[4], m_senderAddressBytes[5], m_senderAddressBytes[6], m_senderAddressBytes[7]);
+  #endif
+
+  // Prepare transaction structure as MessagePack
+  msgPackTx = msgpackInit(&(transactionMessagePackBuffer[0]), ALGORAND_MAX_TX_MSGPACK_SIZE);
+  if (msgPackTx == NULL)  
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.println("\n Error initializing transaction MessagePack\n");
+    #endif
+    return ALGOIOT_MESSAGEPACK_ERROR;
+  }  
+  
+  iErr = prepareApplicationOptInMessagePack(msgPackTx, fv, fee, applicationId);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d preparing application opt-in MessagePack\n", iErr);
+    #endif
+    return ALGOIOT_MESSAGEPACK_ERROR;
+  }
+
+  // Debug print the MessagePack content
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nUnsigned MessagePack content:");
+  debugPrintMessagePack(msgPackTx);
+  #endif
+
+  // Application opt-in transaction correctly assembled. Now sign it
+  iErr = signMessagePackAddingPrefix(msgPackTx, &(signature[0]));
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d signing MessagePack\n", iErr);
+    #endif
+    return ALGOIOT_SIGNATURE_ERROR;
+  }
+
+  // Debug print the signature
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nSignature (64 bytes):");
+  for (int i = 0; i < ALGORAND_SIG_BYTES; i++) {
+    DEBUG_SERIAL.printf("%02X ", signature[i]);
+    if ((i + 1) % 16 == 0) DEBUG_SERIAL.println();
+  }
+  DEBUG_SERIAL.println();
+  #endif
+
+  // Signed OK: now compose payload
+  iErr = createSignedBinaryTransaction(msgPackTx, signature);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d creating signed binary transaction\n", iErr);
+    #endif
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  }
+
+  // Debug print the final signed MessagePack
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nSigned MessagePack content:");
+  debugPrintMessagePack(msgPackTx);
+  
+  // Payload ready. Now we can submit it via algod REST API
+  DEBUG_SERIAL.println("\nReady to submit application opt-in transaction to Algorand network");
+  #endif
+  
+  // Print transaction data in readable format
+  #ifdef LIB_DEBUGMODE
+  printTransactionData(msgPackTx);
+  #endif
+  
+  iErr = submitTransaction(msgPackTx); // Returns HTTP code
+  if (iErr != 200)  // 200 = HTTP OK
+  { // Something went wrong
+    return ALGOIOT_TRANSACTION_ERROR;
+  }
+  
+  // OK: our transaction for application opt-in was successfully submitted to the Algorand blockchain
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.print("\t Application opt-in transaction successfully submitted with ID=");
+  DEBUG_SERIAL.println(getTransactionID());
+  #endif
+  
+  return ALGOIOT_NO_ERROR;
+}
+
+// Prepares an application opt-in transaction MessagePack
+// Returns error code (0 = OK)
+int AlgoIoT::prepareApplicationOptInMessagePack(msgPack msgPackTx,
+                                  const uint32_t lastRound, 
+                                  const uint16_t fee,
+                                  const uint64_t applicationId)
+{ 
+  int iErr = 0;
+  char gen[ALGORAND_NETWORK_ID_CHARS + 1] = "";
+  uint32_t lv = lastRound + ALGORAND_MAX_WAIT_ROUNDS;
+  uint8_t nFields = ALGORAND_APPLICATION_OPTIN_MIN_FIELDS;
+
+  if (msgPackTx == NULL)
+    return ALGOIOT_NULL_POINTER_ERROR;
+  if (msgPackTx->msgBuffer == NULL)
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  if ((lastRound == 0) || (fee == 0))
+  {
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  }
+  
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nPreparing application opt-in with application ID: %llu\n", applicationId);
+  #endif
+  
+  if (m_networkType == ALGORAND_TESTNET)
+  { // TestNet
+    strncpy(gen, ALGORAND_TESTNET_ID, ALGORAND_NETWORK_ID_CHARS);
+    // Decode Algorand network hash
+    iErr = decodeAlgorandNetHash(ALGORAND_TESTNET_HASH, m_netHash);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d decoding Algorand network hash\n\n", iErr);
+      #endif
+      return ALGOIOT_INTERNAL_GENERIC_ERROR;
+    }
+  }
+  else
+  { // MainNet
+    strncpy(gen, ALGORAND_MAINNET_ID, ALGORAND_NETWORK_ID_CHARS);
+    iErr = decodeAlgorandNetHash(ALGORAND_MAINNET_HASH, m_netHash);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d decoding Algorand network hash\n\n", iErr);
+      #endif
+      return ALGOIOT_INTERNAL_GENERIC_ERROR;
+    }
+  }
+  gen[ALGORAND_NETWORK_ID_CHARS] = '\0';
+
+  // We leave a blank space header so we can add:
+  // - "TX" prefix before signing
+  // - m_signature field and "txn" node field after signing
+  iErr = msgPackModifyCurrentPosition(msgPackTx, BLANK_MSGPACK_HEADER);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d from msgPackModifyCurrentPosition()\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // Add root map
+  iErr = msgpackAddShortMap(msgPackTx, nFields); 
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding root map with %d fields\n\n", iErr, nFields);
+    #endif
+    return 5;
+  }
+
+  // Fields must follow alphabetical order
+
+  // "apan" label (OnComplete type - 1 for OptIn)
+  iErr = msgpackAddShortString(msgPackTx, "apan");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding apan label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // apan value (1 for OptIn)
+  iErr = msgpackAddUInt7(msgPackTx, 1);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding apan value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "apid" label (Application ID)
+  iErr = msgpackAddShortString(msgPackTx, "apid");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding apid label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // apid value - Use UInt32 for application IDs that fit in 32 bits to match Algo SDK encoding
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nAdding application ID: %llu\n", applicationId);
+  #endif
+  
+  // Check if the application ID fits in a uint32
+  if (applicationId <= 0xFFFFFFFF) {
+    iErr = msgpackAddUInt32(msgPackTx, (uint32_t)applicationId);
+  } else {
+    iErr = msgpackAddUInt64(msgPackTx, applicationId);
+  }
+  
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding apid value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "fee" label
+  iErr = msgpackAddShortString(msgPackTx, "fee");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding fee label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // fee value
+  iErr = msgpackAddUInt16(msgPackTx, fee);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding fee value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "fv" label
+  iErr = msgpackAddShortString(msgPackTx, "fv");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding fv label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // fv value
+  iErr = msgpackAddUInt32(msgPackTx, lastRound);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding fv value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "gen" label
+  iErr = msgpackAddShortString(msgPackTx, "gen");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding gen label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // gen string
+  iErr = msgpackAddShortString(msgPackTx, gen);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding gen string\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "gh" label
+  iErr = msgpackAddShortString(msgPackTx, "gh");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding gh label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // gh value (binary buffer)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_netHash[0]), (const uint8_t)ALGORAND_NET_HASH_BYTES);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding gh value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "lv" label
+  iErr = msgpackAddShortString(msgPackTx, "lv");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding lv label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // lv value
+  iErr = msgpackAddUInt32(msgPackTx, lv);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding lv value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "snd" label
+  iErr = msgpackAddShortString(msgPackTx, "snd");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding snd label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // snd value (binary buffer)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);  
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding snd value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "type" label
+  iErr = msgpackAddShortString(msgPackTx, "type");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding type label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // type string
+  iErr = msgpackAddShortString(msgPackTx, "appl");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationOptInMessagePack(): ERROR %d adding type string\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nApplication opt-in MessagePack preparation complete");
+  #endif
+
+  // End of messagepack
+  return 0;
+}

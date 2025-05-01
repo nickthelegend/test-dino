@@ -48,6 +48,7 @@
 
 // Add this define after the other defines in the USER-DEFINED SETTINGS section
 #define ASSET_ID_TO_OPT_IN 733709260UL  // Asset ID to opt into
+#define APPLICATION_ID_TO_OPT_IN 738608433UL  // Application ID to opt into
 
 // Sample labels for your data:
 #define SN_LABEL "NodeSerialNum"
@@ -189,6 +190,45 @@ int submitAssetOptIn()
   return ALGOIOT_NETWORK_ERROR;
 }
 
+// Add this function after the submitAssetOptIn function
+int submitApplicationOptIn()
+{
+  int iErr = 0;
+  
+  // Check for WiFi connection
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.print("Trying to connect to WiFi network for application opt-in "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
+  #endif
+  
+  if((g_wifiMulti.run() == WL_CONNECTED)) 
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
+    DEBUG_SERIAL.printf("Submitting application opt-in transaction for application ID: %llu...\n", APPLICATION_ID_TO_OPT_IN);
+    #endif
+
+    // Submit application opt-in transaction
+    iErr = g_algoIoT.submitApplicationOptInToAlgorand(APPLICATION_ID_TO_OPT_IN);
+    if (iErr)
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Error %d submitting application opt-in transaction\n", iErr);
+      #endif
+      return iErr;
+    }
+    else
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("\t*** Application opt-in transaction successfully submitted with ID = %s ***\n\n", g_algoIoT.getTransactionID());
+      #endif
+      return 0;
+    }
+  }
+  
+  // WiFi connection not established
+  return ALGOIOT_NETWORK_ERROR;
+}
+
 
 //////////
 // SETUP
@@ -264,6 +304,28 @@ void setup()
   {
     #ifdef SERIAL_DEBUGMODE
     DEBUG_SERIAL.println("Successfully opted into asset!");
+    #endif
+  }
+
+  // Add this code to the setup() function, right after the asset opt-in code
+  // Opt-in to the application
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.println("Attempting to opt-in to application...");
+  #endif
+  
+  iErr = submitApplicationOptIn();
+  if (iErr != ALGOIOT_NO_ERROR)
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d opting into application: please check network connection and application ID\n\n", iErr);
+    #endif
+    // We don't call waitForever() here because we still want to proceed with sensor data transactions
+    // even if the application opt-in fails
+  }
+  else
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.println("Successfully opted into application!");
     #endif
   }
 }
