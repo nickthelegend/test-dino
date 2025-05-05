@@ -2645,6 +2645,8 @@ int AlgoIoT::submitAssetCreationToAlgorand(
 
 // Prepares an asset creation transaction MessagePack
 // Returns error code (0 = OK)
+// Prepares an asset creation transaction MessagePack
+// Returns error code (0 = OK)
 int AlgoIoT::prepareAssetCreationMessagePack(
    msgPack msgPackTx,
    const uint32_t lastRound, 
@@ -2737,9 +2739,8 @@ int AlgoIoT::prepareAssetCreationMessagePack(
     return 5;
   }
   
-  // Count apar fields
-  uint8_t aparFieldCount = 8; // an, c, dc, f, m, r, t, un
-  if (assetURL != NULL) aparFieldCount++;
+  // Count apar fields - only include essential fields
+  uint8_t aparFieldCount = 3; // an, t, un
   
   // apar value is a map with asset parameters
   iErr = msgpackAddShortMap(msgPackTx, aparFieldCount);
@@ -2771,129 +2772,6 @@ int AlgoIoT::prepareAssetCreationMessagePack(
     return 5;
   }
   
-  // Add asset URL if provided
-  if (assetURL != NULL) {
-    // "au" label (Asset URL)
-    iErr = msgpackAddShortString(msgPackTx, "au");
-    if (iErr)
-    {
-      #ifdef LIB_DEBUGMODE
-      DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding au label\n\n", iErr);
-      #endif
-      return 5;
-    }
-    
-    // Asset URL value
-    iErr = msgpackAddShortString(msgPackTx, assetURL);
-    if (iErr)
-    {
-      #ifdef LIB_DEBUGMODE
-      DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding asset URL\n\n", iErr);
-      #endif
-      return 5;
-    }
-  }
-  
-  // "c" label (Creator address)
-  iErr = msgpackAddShortString(msgPackTx, "c");
-  if (iErr)
-  {
-    #ifdef LIB_DEBUGMODE
-    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding c label\n\n", iErr);
-    #endif
-    return 5;
-  }
-  
-  // Creator address value (same as sender)
-  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);
-  if (iErr)
-  {
-    #ifdef LIB_DEBUGMODE
-    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding creator address\n\n", iErr);
-    #endif
-    return 5;
-  }
-  
-  // "dc" label (Decimals)
-  iErr = msgpackAddShortString(msgPackTx, "dc");
-  if (iErr)
-  {
-    #ifdef LIB_DEBUGMODE
-    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding dc label\n\n", iErr);
-    #endif
-    return 5;
-  }
-  
-  // Decimals value
-  iErr = msgpackAddUInt64(msgPackTx, decimals);
-  if (iErr)
-  {
-    #ifdef LIB_DEBUGMODE
-    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding decimals\n\n", iErr);
-    #endif
-    return 5;
-  }
-  
-  // "f" label (Freeze address)
-  iErr = msgpackAddShortString(msgPackTx, "f");
-  if (iErr)
-  {
-    #ifdef LIB_DEBUGMODE
-    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding f label\n\n", iErr);
-    #endif
-    return 5;
-  }
-  
-  // Freeze address value (same as sender)
-  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);
-  if (iErr)
-  {
-    #ifdef LIB_DEBUGMODE
-    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding freeze address\n\n", iErr);
-    #endif
-    return 5;
-  }
-  
-  // "m" label (Manager address)
-  iErr = msgpackAddShortString(msgPackTx, "m");
-  if (iErr)
-  {
-    #ifdef LIB_DEBUGMODE
-    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding m label\n\n", iErr);
-    #endif
-    return 5;
-  }
-  
-  // Manager address value (same as sender)
-  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);
-  if (iErr)
-  {
-    #ifdef LIB_DEBUGMODE
-    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding manager address\n\n", iErr);
-    #endif
-    return 5;
-  }
-  
-  // "r" label (Reserve address)
-  iErr = msgpackAddShortString(msgPackTx, "r");
-  if (iErr)
-  {
-    #ifdef LIB_DEBUGMODE
-    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding r label\n\n", iErr);
-    #endif
-    return 5;
-  }
-  
-  // Reserve address value (same as sender)
-  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);
-  if (iErr)
-  {
-    #ifdef LIB_DEBUGMODE
-    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding reserve address\n\n", iErr);
-    #endif
-    return 5;
-  }
-  
   // "t" label (Total supply)
   iErr = msgpackAddShortString(msgPackTx, "t");
   if (iErr)
@@ -2904,7 +2782,10 @@ int AlgoIoT::prepareAssetCreationMessagePack(
     return 5;
   }
   
-  
+  // Total supply value
+  if (total <= 0xFFFFFFFF) {
+    iErr = msgpackAddUInt32(msgPackTx, (uint32_t)total);
+  } else {
     iErr = msgpackAddUInt64(msgPackTx, total);
   }
   
