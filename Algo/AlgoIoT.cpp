@@ -2825,7 +2825,7 @@ int AlgoIoT::prepareAssetCreationMessagePack(
   }
   
   // Decimals value
-  iErr = msgpackAddUInt8(msgPackTx, decimals);
+  iErr = msgpackAddUInt64(msgPackTx, decimals);
   if (iErr)
   {
     #ifdef LIB_DEBUGMODE
@@ -2904,16 +2904,7 @@ int AlgoIoT::prepareAssetCreationMessagePack(
     return 5;
   }
   
-  // Total supply value
-  if (total <= 0x7F) {
-    iErr = msgpackAddUInt7(msgPackTx, (uint8_t)total);
-  } else if (total <= 0xFF) {
-    iErr = msgpackAddUInt8(msgPackTx, (uint8_t)total);
-  } else if (total <= 0xFFFF) {
-    iErr = msgpackAddUInt16(msgPackTx, (uint16_t)total);
-  } else if (total <= 0xFFFFFFFF) {
-    iErr = msgpackAddUInt32(msgPackTx, (uint32_t)total);
-  } else {
+  
     iErr = msgpackAddUInt64(msgPackTx, total);
   }
   
