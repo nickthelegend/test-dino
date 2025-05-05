@@ -32,7 +32,7 @@
 
 #include <Arduino.h>
 #include <stdint.h>
-#include <HTTPClient.h>   // https://github.com/espressif/arduino-esp32/blob/master/libraries/HTTPClient/src/HTTPClient.h
+#include <HTTPClient.h>   // https://github.com/espressif/arduino-esp32/blob/master/libraries/HTTPClient/src/HTTPClient/HTTPClient.h
 #include <ArduinoJson.h>  // JSON needed for Algorand transactions. ArduinoJson because: https://arduinojson.org/news/2019/11/19/arduinojson-vs-arduino_json/
 #include "minmpk.h"
 // #include "algoiot_user_config.h"
@@ -84,6 +84,10 @@
 #define DEFAULT_ASSET_ID 733709260 // Default asset ID to use for asset transfers
 #define ALGORAND_APPLICATION_OPTIN_MIN_FIELDS 9 // Fields for application opt-in: apan, apid, fee, fv, gen, gh, lv, snd, type
 #define DEFAULT_APPLICATION_ID 738608433 // Default application ID to use for application opt-ins
+
+// Add these constants after the existing constants
+#define ALGORAND_ASSET_CREATION_MIN_FIELDS 10 // Fields for asset creation: apar, fee, fv, gen, gh, lv, snd, type
+#define DEFAULT_ASSET_TOTAL 1 // Default total supply for created assets
 
 
 // Error codes
@@ -193,6 +197,19 @@ class AlgoIoT
                                   const uint16_t fee,
                                   const uint64_t applicationId);
 
+  // Add this method declaration to the private section of the AlgoIoT class
+  // Prepares an asset creation transaction MessagePack
+  // Returns error code (0 = OK)
+  int prepareAssetCreationMessagePack(
+    msgPack msgPackTx,
+    const uint32_t lastRound, 
+    const uint16_t fee,
+    const char* assetName,
+    const char* unitName,
+    const char* assetURL,
+    uint8_t decimals,
+    const uint64_t total);
+
 
   public:
 
@@ -262,8 +279,22 @@ class AlgoIoT
   // Return: error code (0 = OK)
   int submitApplicationOptInToAlgorand(uint64_t applicationId = DEFAULT_APPLICATION_ID);
 
+  // Add this method declaration to the public section of the AlgoIoT class
+  // Submit asset creation transaction to Algorand network
+  // Return: error code (0 = OK)
+  int submitAssetCreationToAlgorand(
+    const char* assetName, 
+    const char* unitName, 
+    const char* assetURL = NULL,
+    uint8_t decimals = 0,
+    uint64_t total = DEFAULT_ASSET_TOTAL);
+
   // Debug function to examine MessagePack at a specific position
   void debugMessagePackAtPosition(msgPack msgPackTx, uint32_t errorPosition);
+  
+  // Add a new public method to get the sender address bytes
+  // Returns a pointer to the sender address bytes (public key)
+  const uint8_t* getSenderAddressBytes() const;
 };
 
 #endif

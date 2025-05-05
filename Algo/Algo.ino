@@ -229,11 +229,73 @@ int submitApplicationOptIn()
   return ALGOIOT_NETWORK_ERROR;
 }
 
+// Add this function after the submitApplicationOptIn function
+int submitAssetCreation()
+{
+  int iErr = 0;
+  
+  // Check for WiFi connection
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.print("Trying to connect to WiFi network for asset creation "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
+  #endif
+  
+  if((g_wifiMulti.run() == WL_CONNECTED)) 
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
+    DEBUG_SERIAL.println("Submitting asset creation transaction...");
+    #endif
+
+    // Submit asset creation transaction with all parameters
+    // Asset name: "My Asset"
+    // Unit name: "UNIT"
+    // Asset URL: "https://example.com"
+    // Decimals: 2
+    // Total supply: 1000000
+    iErr = g_algoIoT.submitAssetCreationToAlgorand("My Asset", "UNIT", "https://example.com", 2, 1000000);
+    if (iErr)
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Error %d submitting asset creation transaction\n", iErr);
+      #endif
+      return iErr;
+    }
+    else
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("\t*** Asset creation transaction successfully submitted with ID = %s ***\n\n", g_algoIoT.getTransactionID());
+      #endif
+      return 0;
+    }
+  }
+  
+  // WiFi connection not established
+  return ALGOIOT_NETWORK_ERROR;
+}
+
+// Add this helper function to your Algo.ino file to verify the mnemonic conversion
+void testMnemonicConversion() {
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.println("\n===== Testing Mnemonic Conversion =====");
+  
+  // Create a temporary instance to test the mnemonic conversion
+  AlgoIoT testInstance(DAPP_NAME, NODE_ACCOUNT_MNEMONICS);
+  
+  // Print the sender address (public key) derived from the mnemonic
+  DEBUG_SERIAL.println("Derived public key (first 16 bytes):");
+  const uint8_t* senderAddress = testInstance.getSenderAddressBytes();
+  for (int i = 0; i < 16; i++) {
+    DEBUG_SERIAL.printf("%02X ", senderAddress[i]);
+  }
+  DEBUG_SERIAL.println("\n=====================================\n");
+  #endif
+}
 
 //////////
 // SETUP
 //////////
 
+// Add this call to setup() right after the constructor call
 void setup() 
 {  
   int iErr = 0;
@@ -258,6 +320,8 @@ void setup()
   initializeBME280();
   #endif
 
+  // Test mnemonic conversion - add this line
+  testMnemonicConversion();
 
   // Change data receiver address and Algorand network type if needed
   if (RECEIVER_ADDRESS != "")
@@ -326,6 +390,28 @@ void setup()
   {
     #ifdef SERIAL_DEBUGMODE
     DEBUG_SERIAL.println("Successfully opted into application!");
+    #endif
+  }
+
+  // Add this code to the setup() function, right after the application opt-in code
+  // Create an asset
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.println("Attempting to create an asset...");
+  #endif
+
+  iErr = submitAssetCreation();
+  if (iErr != ALGOIOT_NO_ERROR)
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d creating asset: please check network connection\n\n", iErr);
+    #endif
+    // We don't call waitForever() here because we still want to proceed with sensor data transactions
+    // even if the asset creation fails
+  }
+  else
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.println("Successfully created asset!");
     #endif
   }
 }

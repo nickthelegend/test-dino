@@ -150,6 +150,12 @@ const char* AlgoIoT::getTransactionID()
   return m_transactionID;
 }
 
+// Add this implementation at the end of the file, with the other public methods
+
+// Returns a pointer to the sender address bytes (public key)
+const uint8_t* AlgoIoT::getSenderAddressBytes() const {
+  return m_senderAddressBytes;
+}
 
 // Public methods to add values to be written in the blockchain
 // Strongly typed; this helps towards adding ARC-2/MessagePack in the future
@@ -1174,11 +1180,11 @@ int AlgoIoT::decodeAlgorandAddress(const char* addressB32, uint8_t*& outBinaryAd
 }
 
 
+// Replace the existing decodePrivateKeyFromMnemonics function with this improved version
 int AlgoIoT::decodePrivateKeyFromMnemonics(const char* inMnemonicWords, uint8_t privateKey[ALGORAND_KEY_BYTES])
 { 
   uint16_t  indexes11bit[ALGORAND_MNEMONICS_NUMBER];
   uint8_t   decodedBytes[ALGORAND_KEY_BYTES + 3];
-  // char      checksumWord[ALGORAND_MNEMONIC_MAX_LEN + 1] = "";  
   char*     mnWord = NULL;
   char*     mnemonicWords = NULL;
 
@@ -1197,7 +1203,7 @@ int AlgoIoT::decodePrivateKeyFromMnemonics(const char* inMnemonicWords, uint8_t 
     return 7;
   strcpy(mnemonicWords, inMnemonicWords);
 
-  // Off-cycle
+  // First word
   mnWord = strtok(mnemonicWords, " ");
   if (mnWord == NULL)
   {
@@ -1209,7 +1215,7 @@ int AlgoIoT::decodePrivateKeyFromMnemonics(const char* inMnemonicWords, uint8_t 
   uint8_t index = 0;
   uint8_t found = 0;
   uint16_t pos = 0;
-  while (mnWord != NULL) 
+  while (mnWord != NULL && index < ALGORAND_MNEMONICS_NUMBER) 
   {
     // Check word validity against BIP39 English words
     found = 0;
@@ -1225,37 +1231,33 @@ int AlgoIoT::decodePrivateKeyFromMnemonics(const char* inMnemonicWords, uint8_t 
     }
     if (!found)
     {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("Invalid word: %s at position %d\n", mnWord, index);
+      #endif
       free(mnemonicWords);
       return 4; // Wrong mnemonics: invalid word
     }
-    if (index > ALGORAND_MNEMONICS_NUMBER)
-    {
-      free(mnemonicWords);
-      return 5; // Wrong mnemonics: too many words
-    }
 
-    mnWord = strtok(NULL, " "); // strtok with NULL as first argument means it continues to parse the original string
+    mnWord = strtok(NULL, " "); // Continue parsing the original string
   }
 
   if (index != ALGORAND_MNEMONICS_NUMBER)
   {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("Wrong number of words: %d (expected %d)\n", index, ALGORAND_MNEMONICS_NUMBER);
+    #endif
     free(mnemonicWords);
-    return 6; // Wrong mnemonics: too few words (we already managed the too much words case)
+    return 6; // Wrong mnemonics: incorrect number of words
   }
   
-  // We now have an array of ALGORAND_MNEMONICS_NUMBER 16-bit unsigned values, which actually only use 11 bits (0..2047)
-  // The last element is a checksum 
-
-  // Save checksum word (not used ATM, see below)
-  // strncpy(checksumWord, BIP39_EN_Wordlist[indexes[index-1]], ALGORAND_MNEMONIC_MAX_LEN);
-
   free(mnemonicWords);
 
-  // We now build a byte array from the uint16_t array: 25 x 11-bits values become 34/35 x 8-bits values
-
+  // Convert 11-bit values to byte array
+  memset(decodedBytes, 0, sizeof(decodedBytes));
   uint32_t tempInt = 0;
   uint16_t numBits = 0;
   uint16_t destIndex = 0;
+  
   for (uint16_t i = 0; i < ALGORAND_MNEMONICS_NUMBER; i++)
   { 
     // For each 11-bit value, fill appropriate consecutive byte array elements
@@ -1263,21 +1265,28 @@ int AlgoIoT::decodePrivateKeyFromMnemonics(const char* inMnemonicWords, uint8_t 
     numBits += 11;
     while (numBits >= 8)
     {
-      decodedBytes[destIndex] = (uint8_t)(tempInt & 0xff);
-      destIndex++;
+      decodedBytes[destIndex++] = (uint8_t)(tempInt & 0xff);
       tempInt = tempInt >> 8;
       numBits -= 8;
     }
   }
-  if (numBits != 0)
+  
+  // Handle any remaining bits
+  if (numBits > 0)
   {
     decodedBytes[destIndex] = (uint8_t)(tempInt & 0xff);
   }
 
-  // TODO we do not verify the checksum, because at the moment we miss a viable implementation of SHA512/256
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("Derived private key (first 8 bytes):");
+  for (int i = 0; i < 8; i++) {
+    DEBUG_SERIAL.printf("%02X ", decodedBytes[i]);
+  }
+  DEBUG_SERIAL.println();
+  #endif
 
-  // Copy key to output array
-  memcpy((void*)&(privateKey[0]), (void*)decodedBytes, ALGORAND_KEY_BYTES);
+  // Copy key to output array (first 32 bytes)
+  memcpy((void*)privateKey, (void*)decodedBytes, ALGORAND_KEY_BYTES);
 
   return 0;
 }
@@ -1720,8 +1729,36 @@ int AlgoIoT::signMessagePackAddingPrefix(msgPack msgPackTx, uint8_t signature[AL
   payloadPointer[0] = 'T';
   payloadPointer[1] = 'X';
 
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("Transaction data to be signed (with TX prefix):");
+  for (uint32_t i = 0; i < 16 && i < payloadBytes; i++) {
+    DEBUG_SERIAL.printf("%02X ", payloadPointer[i]);
+  }
+  DEBUG_SERIAL.println("...");
+  
+  DEBUG_SERIAL.println("Private key (first 8 bytes):");
+  for (int i = 0; i < 8; i++) {
+    DEBUG_SERIAL.printf("%02X ", m_privateKey[i]);
+  }
+  DEBUG_SERIAL.println();
+  
+  DEBUG_SERIAL.println("Public key (first 8 bytes):");
+  for (int i = 0; i < 8; i++) {
+    DEBUG_SERIAL.printf("%02X ", m_senderAddressBytes[i]);
+  }
+  DEBUG_SERIAL.println();
+  #endif
+
   // Sign pack+prefix
   Ed25519::sign(signature, m_privateKey, m_senderAddressBytes, payloadPointer, payloadBytes);
+
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("Generated signature (first 16 bytes):");
+  for (int i = 0; i < 16; i++) {
+    DEBUG_SERIAL.printf("%02X ", signature[i]);
+  }
+  DEBUG_SERIAL.println("...");
+  #endif
 
   return 0;
 }
@@ -2465,6 +2502,584 @@ int AlgoIoT::prepareApplicationOptInMessagePack(msgPack msgPackTx,
   
   #ifdef LIB_DEBUGMODE
   DEBUG_SERIAL.println("\nApplication opt-in MessagePack preparation complete");
+  #endif
+
+  // End of messagepack
+  return 0;
+}
+
+// Add this implementation after the submitApplicationOptInToAlgorand method
+
+// Submit asset creation transaction to Algorand network
+// Return: error code (0 = OK)
+int AlgoIoT::submitAssetCreationToAlgorand(
+    const char* assetName, 
+    const char* unitName, 
+    const char* assetURL,
+    uint8_t decimals,
+    uint64_t total)
+{
+  uint32_t fv = 0;
+  uint16_t fee = 0;
+  int iErr = 0;
+  uint8_t signature[ALGORAND_SIG_BYTES];
+  uint8_t transactionMessagePackBuffer[ALGORAND_MAX_TX_MSGPACK_SIZE];
+  char transactionID[ALGORAND_TRANSACTIONID_SIZE + 1] = "";
+  msgPack msgPackTx = NULL;
+
+  // Validate parameters
+  if (assetName == NULL || unitName == NULL) {
+    return ALGOIOT_BAD_PARAM;
+  }
+  
+  if (strlen(assetName) > 32 || strlen(unitName) > 8) {
+    return ALGOIOT_BAD_PARAM;
+  }
+
+  // Get current Algorand parameters
+  int httpResCode = getAlgorandTxParams(&fv, &fee);
+  if (httpResCode != 200)
+  {
+    return ALGOIOT_NETWORK_ERROR;
+  }
+
+  // Asset creation may require higher fees
+  if (fee < 1000) {
+    fee = 1000;
+  }
+
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nPreparing asset creation transaction for asset: %s (%s)\n", assetName, unitName);
+  DEBUG_SERIAL.printf("First valid round: %u, Fee: %u\n", fv, fee);
+  DEBUG_SERIAL.printf("Sender address (first 8 bytes): %02X %02X %02X %02X %02X %02X %02X %02X\n", 
+                     m_senderAddressBytes[0], m_senderAddressBytes[1], m_senderAddressBytes[2], m_senderAddressBytes[3],
+                     m_senderAddressBytes[4], m_senderAddressBytes[5], m_senderAddressBytes[6], m_senderAddressBytes[7]);
+  #endif
+
+  // Prepare transaction structure as MessagePack
+  msgPackTx = msgpackInit(&(transactionMessagePackBuffer[0]), ALGORAND_MAX_TX_MSGPACK_SIZE);
+  if (msgPackTx == NULL)  
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.println("\n Error initializing transaction MessagePack\n");
+    #endif
+    return ALGOIOT_MESSAGEPACK_ERROR;
+  }  
+  
+  iErr = prepareAssetCreationMessagePack(msgPackTx, fv, fee, assetName, unitName, assetURL, decimals, total);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d preparing asset creation MessagePack\n", iErr);
+    #endif
+    return ALGOIOT_MESSAGEPACK_ERROR;
+  }
+
+  // Debug print the MessagePack content
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nUnsigned MessagePack content:");
+  debugPrintMessagePack(msgPackTx);
+  #endif
+
+  // Asset creation transaction correctly assembled. Now sign it
+  iErr = signMessagePackAddingPrefix(msgPackTx, &(signature[0]));
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d signing MessagePack\n", iErr);
+    #endif
+    return ALGOIOT_SIGNATURE_ERROR;
+  }
+
+  // Debug print the signature
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nSignature (64 bytes):");
+  for (int i = 0; i < ALGORAND_SIG_BYTES; i++) {
+    DEBUG_SERIAL.printf("%02X ", signature[i]);
+    if ((i + 1) % 16 == 0) DEBUG_SERIAL.println();
+  }
+  DEBUG_SERIAL.println();
+  #endif
+
+  // Signed OK: now compose payload
+  iErr = createSignedBinaryTransaction(msgPackTx, signature);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d creating signed binary transaction\n", iErr);
+    #endif
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  }
+
+  // Debug print the final signed MessagePack
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nSigned MessagePack content:");
+  debugPrintMessagePack(msgPackTx);
+  
+  // Payload ready. Now we can submit it via algod REST API
+  DEBUG_SERIAL.println("\nReady to submit asset creation transaction to Algorand network");
+  #endif
+  
+  // Print transaction data in readable format
+  #ifdef LIB_DEBUGMODE
+  printTransactionData(msgPackTx);
+  #endif
+  
+  iErr = submitTransaction(msgPackTx); // Returns HTTP code
+  if (iErr != 200)  // 200 = HTTP OK
+  { // Something went wrong
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d submitting asset creation transaction\n", iErr);
+    #endif
+    return ALGOIOT_TRANSACTION_ERROR;
+  }
+  
+  // OK: our transaction for asset creation was successfully submitted to the Algorand blockchain
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.print("\t Asset creation transaction successfully submitted with ID=");
+  DEBUG_SERIAL.println(getTransactionID());
+  #endif
+  
+  return ALGOIOT_NO_ERROR;
+}
+
+// Prepares an asset creation transaction MessagePack
+// Returns error code (0 = OK)
+int AlgoIoT::prepareAssetCreationMessagePack(
+   msgPack msgPackTx,
+   const uint32_t lastRound, 
+   const uint16_t fee,
+   const char* assetName,
+   const char* unitName,
+   const char* assetURL,
+   uint8_t decimals,
+   const uint64_t total)
+{ 
+  int iErr = 0;
+  char gen[ALGORAND_NETWORK_ID_CHARS + 1] = "";
+  uint32_t lv = lastRound + ALGORAND_MAX_WAIT_ROUNDS;
+
+  if (msgPackTx == NULL)
+    return ALGOIOT_NULL_POINTER_ERROR;
+  if (msgPackTx->msgBuffer == NULL)
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  if ((lastRound == 0) || (fee == 0))
+  {
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  }
+  
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nPreparing asset creation for asset: %s (%s) with total supply: %llu\n", 
+                     assetName, unitName, total);
+  #endif
+  
+  if (m_networkType == ALGORAND_TESTNET)
+  { // TestNet
+    strncpy(gen, ALGORAND_TESTNET_ID, ALGORAND_NETWORK_ID_CHARS);
+    // Decode Algorand network hash
+    iErr = decodeAlgorandNetHash(ALGORAND_TESTNET_HASH, m_netHash);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d decoding Algorand network hash\n\n", iErr);
+      #endif
+      return ALGOIOT_INTERNAL_GENERIC_ERROR;
+    }
+  }
+  else
+  { // MainNet
+    strncpy(gen, ALGORAND_MAINNET_ID, ALGORAND_NETWORK_ID_CHARS);
+    iErr = decodeAlgorandNetHash(ALGORAND_MAINNET_HASH, m_netHash);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d decoding Algorand network hash\n\n", iErr);
+      #endif
+      return ALGOIOT_INTERNAL_GENERIC_ERROR;
+    }
+  }
+  gen[ALGORAND_NETWORK_ID_CHARS] = '\0';
+
+  // We leave a blank space header so we can add:
+  // - "TX" prefix before signing
+  // - m_signature field and "txn" node field after signing
+  iErr = msgPackModifyCurrentPosition(msgPackTx, BLANK_MSGPACK_HEADER);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d from msgPackModifyCurrentPosition()\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // Count fields for the root map
+  uint8_t rootFieldCount = 8; // apar, fee, fv, gen, gh, lv, snd, type
+  
+  // Add root map
+  iErr = msgpackAddShortMap(msgPackTx, rootFieldCount); 
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding root map with %d fields\n\n", iErr, rootFieldCount);
+    #endif
+    return 5;
+  }
+
+  // Fields must follow alphabetical order
+
+  // "apar" label (Asset Parameters)
+  iErr = msgpackAddShortString(msgPackTx, "apar");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding apar label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // Count apar fields
+  uint8_t aparFieldCount = 8; // an, c, dc, f, m, r, t, un
+  if (assetURL != NULL) aparFieldCount++;
+  
+  // apar value is a map with asset parameters
+  iErr = msgpackAddShortMap(msgPackTx, aparFieldCount);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding apar map\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // "an" label (Asset Name)
+  iErr = msgpackAddShortString(msgPackTx, "an");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding an label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // Asset name value
+  iErr = msgpackAddShortString(msgPackTx, assetName);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding asset name\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // Add asset URL if provided
+  if (assetURL != NULL) {
+    // "au" label (Asset URL)
+    iErr = msgpackAddShortString(msgPackTx, "au");
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding au label\n\n", iErr);
+      #endif
+      return 5;
+    }
+    
+    // Asset URL value
+    iErr = msgpackAddShortString(msgPackTx, assetURL);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding asset URL\n\n", iErr);
+      #endif
+      return 5;
+    }
+  }
+  
+  // "c" label (Creator address)
+  iErr = msgpackAddShortString(msgPackTx, "c");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding c label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // Creator address value (same as sender)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding creator address\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // "dc" label (Decimals)
+  iErr = msgpackAddShortString(msgPackTx, "dc");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding dc label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // Decimals value
+  iErr = msgpackAddUInt8(msgPackTx, decimals);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding decimals\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // "f" label (Freeze address)
+  iErr = msgpackAddShortString(msgPackTx, "f");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding f label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // Freeze address value (same as sender)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding freeze address\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // "m" label (Manager address)
+  iErr = msgpackAddShortString(msgPackTx, "m");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding m label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // Manager address value (same as sender)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding manager address\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // "r" label (Reserve address)
+  iErr = msgpackAddShortString(msgPackTx, "r");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding r label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // Reserve address value (same as sender)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding reserve address\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // "t" label (Total supply)
+  iErr = msgpackAddShortString(msgPackTx, "t");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding t label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // Total supply value
+  if (total <= 0x7F) {
+    iErr = msgpackAddUInt7(msgPackTx, (uint8_t)total);
+  } else if (total <= 0xFF) {
+    iErr = msgpackAddUInt8(msgPackTx, (uint8_t)total);
+  } else if (total <= 0xFFFF) {
+    iErr = msgpackAddUInt16(msgPackTx, (uint16_t)total);
+  } else if (total <= 0xFFFFFFFF) {
+    iErr = msgpackAddUInt32(msgPackTx, (uint32_t)total);
+  } else {
+    iErr = msgpackAddUInt64(msgPackTx, total);
+  }
+  
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding total supply\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // "un" label (Unit name)
+  iErr = msgpackAddShortString(msgPackTx, "un");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding un label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // Unit name value
+  iErr = msgpackAddShortString(msgPackTx, unitName);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding unit name\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "fee" label - MUST be after apar is complete
+  iErr = msgpackAddShortString(msgPackTx, "fee");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding fee label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // fee value
+  iErr = msgpackAddUInt16(msgPackTx, fee);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding fee value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "fv" label
+  iErr = msgpackAddShortString(msgPackTx, "fv");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding fv label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // fv value
+  iErr = msgpackAddUInt32(msgPackTx, lastRound);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding fv value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "gen" label
+  iErr = msgpackAddShortString(msgPackTx, "gen");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding gen label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // gen string
+  iErr = msgpackAddShortString(msgPackTx, gen);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding gen string\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "gh" label
+  iErr = msgpackAddShortString(msgPackTx, "gh");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding gh label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // gh value (binary buffer)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_netHash[0]), (const uint8_t)ALGORAND_NET_HASH_BYTES);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding gh value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "lv" label
+  iErr = msgpackAddShortString(msgPackTx, "lv");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding lv label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // lv value
+  iErr = msgpackAddUInt32(msgPackTx, lv);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding lv value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "snd" label
+  iErr = msgpackAddShortString(msgPackTx, "snd");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding snd label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // snd value (binary buffer)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);  
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding snd value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "type" label
+  iErr = msgpackAddShortString(msgPackTx, "type");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding type label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // type string
+  iErr = msgpackAddShortString(msgPackTx, "acfg");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetCreationMessagePack(): ERROR %d adding type string\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nAsset creation MessagePack preparation complete");
   #endif
 
   // End of messagepack
