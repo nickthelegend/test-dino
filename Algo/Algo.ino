@@ -32,8 +32,8 @@
 // USER-DEFINED SETTINGS
 ///////////////////////////
 // Please edit accordingly
-#define MYWIFI_SSID "JNTU2" 	
-#define MYWIFI_PWD "" 
+#define MYWIFI_SSID "nickthelegend-2.4G" 	
+#define MYWIFI_PWD "Nicolas1234@" 
 
 // Assign a name to your IoT app:
 #define DAPP_NAME "AlgoIoT_MyTest1" // Keep it short; 31 chars = absolute max length
@@ -578,7 +578,7 @@ void loop()
 
 void waitForever()
 {
-  while(1)
+  while(1)e:\Users\testi\Documents\Arduino\test-dino\Algo\AlgoIoT.cpp
     delay(ULONG_MAX);
 }
 
