@@ -88,6 +88,8 @@
 // Add these constants after the existing constants
 #define ALGORAND_ASSET_CREATION_MIN_FIELDS 10 // Fields for asset creation: apar, fee, fv, gen, gh, lv, snd, type
 #define DEFAULT_ASSET_TOTAL 1 // Default total supply for created assets
+#define ALGORAND_APPLICATION_NOOP_MIN_FIELDS 7 // Fields for application NoOp: apid, fee, fv, gen, gh, lv, snd, type (minimum fields)
+#define DEFAULT_APPLICATION_NOOP_ID 51 // Default application ID for NoOp calls
 
 
 // Error codes
@@ -210,6 +212,22 @@ class AlgoIoT
     uint8_t decimals,
     const uint64_t total);
 
+  // Prepares an application NoOp transaction MessagePack
+  // Returns error code (0 = OK)
+  int prepareApplicationNoOpMessagePack(
+    msgPack msgPackTx,
+    const uint32_t lastRound, 
+    const uint16_t fee,
+    const uint64_t applicationId,
+    const char** appArgs = NULL,
+    uint8_t appArgsCount = 0,
+    const uint64_t* foreignAssets = NULL,
+    uint8_t foreignAssetsCount = 0,
+    const uint64_t* foreignApps = NULL,
+    uint8_t foreignAppsCount = 0,
+    const char** accounts = NULL,
+    uint8_t accountsCount = 0);
+
 
   public:
 
@@ -288,6 +306,19 @@ class AlgoIoT
     const char* assetURL = NULL,
     uint8_t decimals = 0,
     uint64_t total = DEFAULT_ASSET_TOTAL);
+
+  // Submit application NoOp transaction to Algorand network
+  // Return: error code (0 = OK)
+  int submitApplicationNoOpToAlgorand(
+    uint64_t applicationId,
+    const char** appArgs = NULL,
+    uint8_t appArgsCount = 0,
+    const uint64_t* foreignAssets = NULL,
+    uint8_t foreignAssetsCount = 0,
+    const uint64_t* foreignApps = NULL,
+    uint8_t foreignAppsCount = 0,
+    const char** accounts = NULL,
+    uint8_t accountsCount = 0);
 
   // Debug function to examine MessagePack at a specific position
   void debugMessagePackAtPosition(msgPack msgPackTx, uint32_t errorPosition);

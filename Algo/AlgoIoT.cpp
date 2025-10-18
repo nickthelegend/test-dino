@@ -2957,3 +2957,560 @@ int AlgoIoT::prepareAssetCreationMessagePack(
   // End of messagepack
   return 0;
 }
+
+// Submit application NoOp transaction to Algorand network
+// Return: error code (0 = OK)
+int AlgoIoT::submitApplicationNoOpToAlgorand(
+    uint64_t applicationId,
+    const char** appArgs,
+    uint8_t appArgsCount,
+    const uint64_t* foreignAssets,
+    uint8_t foreignAssetsCount,
+    const uint64_t* foreignApps,
+    uint8_t foreignAppsCount,
+    const char** accounts,
+    uint8_t accountsCount)
+{
+  uint32_t fv = 0;
+  uint16_t fee = 0;
+  int iErr = 0;
+  uint8_t signature[ALGORAND_SIG_BYTES];
+  uint8_t transactionMessagePackBuffer[ALGORAND_MAX_TX_MSGPACK_SIZE];
+  char transactionID[ALGORAND_TRANSACTIONID_SIZE + 1] = "";
+  msgPack msgPackTx = NULL;
+
+  // Get current Algorand parameters
+  int httpResCode = getAlgorandTxParams(&fv, &fee);
+  if (httpResCode != 200)
+  {
+    return ALGOIOT_NETWORK_ERROR;
+  }
+
+  // Application calls may require higher fees
+  if (fee < 1000) {
+    fee = 1000;
+  }
+
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nPreparing application NoOp transaction for application ID: %llu\n", applicationId);
+  DEBUG_SERIAL.printf("First valid round: %u, Fee: %u\n", fv, fee);
+  DEBUG_SERIAL.printf("App Args Count: %u, Foreign Assets Count: %u, Foreign Apps Count: %u, Accounts Count: %u\n", 
+                     appArgsCount, foreignAssetsCount, foreignAppsCount, accountsCount);
+  DEBUG_SERIAL.printf("Sender address (first 8 bytes): %02X %02X %02X %02X %02X %02X %02X %02X\n", 
+                     m_senderAddressBytes[0], m_senderAddressBytes[1], m_senderAddressBytes[2], m_senderAddressBytes[3],
+                     m_senderAddressBytes[4], m_senderAddressBytes[5], m_senderAddressBytes[6], m_senderAddressBytes[7]);
+  #endif
+
+  // Prepare transaction structure as MessagePack
+  msgPackTx = msgpackInit(&(transactionMessagePackBuffer[0]), ALGORAND_MAX_TX_MSGPACK_SIZE);
+  if (msgPackTx == NULL)  
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.println("\n Error initializing transaction MessagePack\n");
+    #endif
+    return ALGOIOT_MESSAGEPACK_ERROR;
+  }  
+  
+  iErr = prepareApplicationNoOpMessagePack(msgPackTx, fv, fee, applicationId, 
+                                         appArgs, appArgsCount,
+                                         foreignAssets, foreignAssetsCount,
+                                         foreignApps, foreignAppsCount,
+                                         accounts, accountsCount);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d preparing application NoOp MessagePack\n", iErr);
+    #endif
+    return ALGOIOT_MESSAGEPACK_ERROR;
+  }
+
+  // Debug print the MessagePack content
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nUnsigned MessagePack content:");
+  debugPrintMessagePack(msgPackTx);
+  #endif
+
+  // Application NoOp transaction correctly assembled. Now sign it
+  iErr = signMessagePackAddingPrefix(msgPackTx, &(signature[0]));
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d signing MessagePack\n", iErr);
+    #endif
+    return ALGOIOT_SIGNATURE_ERROR;
+  }
+
+  // Debug print the signature
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nSignature (64 bytes):");
+  for (int i = 0; i < ALGORAND_SIG_BYTES; i++) {
+    DEBUG_SERIAL.printf("%02X ", signature[i]);
+    if ((i + 1) % 16 == 0) DEBUG_SERIAL.println();
+  }
+  DEBUG_SERIAL.println();
+  #endif
+
+  // Signed OK: now compose payload
+  iErr = createSignedBinaryTransaction(msgPackTx, signature);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d creating signed binary transaction\n", iErr);
+    #endif
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  }
+
+  // Debug print the final signed MessagePack
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nSigned MessagePack content:");
+  debugPrintMessagePack(msgPackTx);
+  
+  // Payload ready. Now we can submit it via algod REST API
+  DEBUG_SERIAL.println("\nReady to submit application NoOp transaction to Algorand network");
+  #endif
+  
+  // Print transaction data in readable format
+  #ifdef LIB_DEBUGMODE
+  printTransactionData(msgPackTx);
+  #endif
+  
+  iErr = submitTransaction(msgPackTx); // Returns HTTP code
+  if (iErr != 200)  // 200 = HTTP OK
+  { // Something went wrong
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d submitting application NoOp transaction\n", iErr);
+    #endif
+    return ALGOIOT_TRANSACTION_ERROR;
+  }
+  
+  // OK: our transaction for application NoOp was successfully submitted to the Algorand blockchain
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.print("\t Application NoOp transaction successfully submitted with ID=");
+  DEBUG_SERIAL.println(getTransactionID());
+  #endif
+  
+  return ALGOIOT_NO_ERROR;
+}
+
+// Prepares an application NoOp transaction MessagePack
+// Returns error code (0 = OK)
+int AlgoIoT::prepareApplicationNoOpMessagePack(
+    msgPack msgPackTx,
+    const uint32_t lastRound, 
+    const uint16_t fee,
+    const uint64_t applicationId,
+    const char** appArgs,
+    uint8_t appArgsCount,
+    const uint64_t* foreignAssets,
+    uint8_t foreignAssetsCount,
+    const uint64_t* foreignApps,
+    uint8_t foreignAppsCount,
+    const char** accounts,
+    uint8_t accountsCount)
+{ 
+  int iErr = 0;
+  char gen[ALGORAND_NETWORK_ID_CHARS + 1] = "";
+  uint32_t lv = lastRound + ALGORAND_MAX_WAIT_ROUNDS;
+
+  if (msgPackTx == NULL)
+    return ALGOIOT_NULL_POINTER_ERROR;
+  if (msgPackTx->msgBuffer == NULL)
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  if ((lastRound == 0) || (fee == 0))
+  {
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  }
+  
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nPreparing application NoOp with application ID: %llu\n", applicationId);
+  #endif
+  
+  if (m_networkType == ALGORAND_TESTNET)
+  { // TestNet
+    strncpy(gen, ALGORAND_TESTNET_ID, ALGORAND_NETWORK_ID_CHARS);
+    // Decode Algorand network hash
+    iErr = decodeAlgorandNetHash(ALGORAND_TESTNET_HASH, m_netHash);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d decoding Algorand network hash\n\n", iErr);
+      #endif
+      return ALGOIOT_INTERNAL_GENERIC_ERROR;
+    }
+  }
+  else
+  { // MainNet
+    strncpy(gen, ALGORAND_MAINNET_ID, ALGORAND_NETWORK_ID_CHARS);
+    iErr = decodeAlgorandNetHash(ALGORAND_MAINNET_HASH, m_netHash);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d decoding Algorand network hash\n\n", iErr);
+      #endif
+      return ALGOIOT_INTERNAL_GENERIC_ERROR;
+    }
+  }
+  gen[ALGORAND_NETWORK_ID_CHARS] = '\0';
+
+  // We leave a blank space header so we can add:
+  // - "TX" prefix before signing
+  // - m_signature field and "txn" node field after signing
+  iErr = msgPackModifyCurrentPosition(msgPackTx, BLANK_MSGPACK_HEADER);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d from msgPackModifyCurrentPosition()\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // Count fields for the root map - start with minimum required fields
+  uint8_t rootFieldCount = ALGORAND_APPLICATION_NOOP_MIN_FIELDS; // apid, fee, fv, gen, gh, lv, snd, type
+  
+  // Add optional fields if provided
+  if (appArgsCount > 0) rootFieldCount++; // apaa
+  if (foreignAssetsCount > 0) rootFieldCount++; // apas
+  if (foreignAppsCount > 0) rootFieldCount++; // apfa
+  if (accountsCount > 0) rootFieldCount++; // apat
+  
+  // Add root map
+  iErr = msgpackAddShortMap(msgPackTx, rootFieldCount); 
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding root map with %d fields\n\n", iErr, rootFieldCount);
+    #endif
+    return 5;
+  }
+
+  // Fields must follow alphabetical order
+
+  // "apid" label (Application ID)
+  iErr = msgpackAddShortString(msgPackTx, "apid");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apid label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // apid value - Use UInt32 for application IDs that fit in 32 bits to match Algo SDK encoding
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nAdding application ID: %llu\n", applicationId);
+  #endif
+  
+  // Check if the application ID fits in a uint32
+  if (applicationId <= 0xFFFFFFFF) {
+    iErr = msgpackAddUInt32(msgPackTx, (uint32_t)applicationId);
+  } else {
+    iErr = msgpackAddUInt64(msgPackTx, applicationId);
+  }
+  
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apid value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "apaa" label (Application Arguments) - optional
+  if (appArgsCount > 0) {
+    iErr = msgpackAddShortString(msgPackTx, "apaa");
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apaa label\n\n", iErr);
+      #endif
+      return 5;
+    }
+    
+    // apaa value is an array of byte arrays
+    iErr = msgpackAddShortArray(msgPackTx, appArgsCount);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apaa array\n\n", iErr);
+      #endif
+      return 5;
+    }
+    
+    for (uint8_t i = 0; i < appArgsCount; i++) {
+      if (appArgs[i] != NULL) {
+        // Convert string to byte array
+        iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)appArgs[i], (const uint8_t)strlen(appArgs[i]));
+        if (iErr)
+        {
+          #ifdef LIB_DEBUGMODE
+          DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apaa[%d]\n\n", iErr, i);
+          #endif
+          return 5;
+        }
+      }
+    }
+  }
+
+  // "apat" label (Accounts) - optional
+  if (accountsCount > 0) {
+    iErr = msgpackAddShortString(msgPackTx, "apat");
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apat label\n\n", iErr);
+      #endif
+      return 5;
+    }
+    
+    // apat value is an array of addresses
+    iErr = msgpackAddShortArray(msgPackTx, accountsCount);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apat array\n\n", iErr);
+      #endif
+      return 5;
+    }
+    
+    for (uint8_t i = 0; i < accountsCount; i++) {
+      if (accounts[i] != NULL) {
+        // Decode and add the account address
+        uint8_t* accountBytes = NULL;
+        iErr = decodeAlgorandAddress(accounts[i], accountBytes);
+        if (iErr)
+        {
+          #ifdef LIB_DEBUGMODE
+          DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d decoding account[%d]\n\n", iErr, i);
+          #endif
+          return 5;
+        }
+        
+        iErr = msgpackAddShortByteArray(msgPackTx, accountBytes, (const uint8_t)ALGORAND_ADDRESS_BYTES);
+        free(accountBytes); // Free the allocated memory
+        if (iErr)
+        {
+          #ifdef LIB_DEBUGMODE
+          DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apat[%d]\n\n", iErr, i);
+          #endif
+          return 5;
+        }
+      }
+    }
+  }
+
+  // "apas" label (Foreign Assets) - optional
+  if (foreignAssetsCount > 0) {
+    iErr = msgpackAddShortString(msgPackTx, "apas");
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apas label\n\n", iErr);
+      #endif
+      return 5;
+    }
+    
+    // apas value is an array of asset IDs
+    iErr = msgpackAddShortArray(msgPackTx, foreignAssetsCount);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apas array\n\n", iErr);
+      #endif
+      return 5;
+    }
+    
+    for (uint8_t i = 0; i < foreignAssetsCount; i++) {
+      // Add asset ID (use appropriate encoding based on size)
+      if (foreignAssets[i] <= 0xFFFFFFFF) {
+        iErr = msgpackAddUInt32(msgPackTx, (uint32_t)foreignAssets[i]);
+      } else {
+        iErr = msgpackAddUInt64(msgPackTx, foreignAssets[i]);
+      }
+      if (iErr)
+      {
+        #ifdef LIB_DEBUGMODE
+        DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apas[%d]\n\n", iErr, i);
+        #endif
+        return 5;
+      }
+    }
+  }
+
+  // "apfa" label (Foreign Apps) - optional
+  if (foreignAppsCount > 0) {
+    iErr = msgpackAddShortString(msgPackTx, "apfa");
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apfa label\n\n", iErr);
+      #endif
+      return 5;
+    }
+    
+    // apfa value is an array of application IDs
+    iErr = msgpackAddShortArray(msgPackTx, foreignAppsCount);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apfa array\n\n", iErr);
+      #endif
+      return 5;
+    }
+    
+    for (uint8_t i = 0; i < foreignAppsCount; i++) {
+      // Add application ID (use appropriate encoding based on size)
+      if (foreignApps[i] <= 0xFFFFFFFF) {
+        iErr = msgpackAddUInt32(msgPackTx, (uint32_t)foreignApps[i]);
+      } else {
+        iErr = msgpackAddUInt64(msgPackTx, foreignApps[i]);
+      }
+      if (iErr)
+      {
+        #ifdef LIB_DEBUGMODE
+        DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apfa[%d]\n\n", iErr, i);
+        #endif
+        return 5;
+      }
+    }
+  }
+
+  // "fee" label
+  iErr = msgpackAddShortString(msgPackTx, "fee");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding fee label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // fee value
+  iErr = msgpackAddUInt16(msgPackTx, fee);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding fee value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "fv" label
+  iErr = msgpackAddShortString(msgPackTx, "fv");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding fv label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // fv value
+  iErr = msgpackAddUInt32(msgPackTx, lastRound);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding fv value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "gen" label
+  iErr = msgpackAddShortString(msgPackTx, "gen");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding gen label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // gen string
+  iErr = msgpackAddShortString(msgPackTx, gen);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding gen string\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "gh" label
+  iErr = msgpackAddShortString(msgPackTx, "gh");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding gh label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // gh value (binary buffer)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_netHash[0]), (const uint8_t)ALGORAND_NET_HASH_BYTES);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding gh value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "lv" label
+  iErr = msgpackAddShortString(msgPackTx, "lv");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding lv label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // lv value
+  iErr = msgpackAddUInt32(msgPackTx, lv);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding lv value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "snd" label
+  iErr = msgpackAddShortString(msgPackTx, "snd");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding snd label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // snd value (binary buffer)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);  
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding snd value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "type" label
+  iErr = msgpackAddShortString(msgPackTx, "type");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding type label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // type string
+  iErr = msgpackAddShortString(msgPackTx, "appl");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding type string\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nApplication NoOp MessagePack preparation complete");
+  #endif
+
+  // End of messagepack
+  return 0;
+}

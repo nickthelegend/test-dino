@@ -48,6 +48,9 @@
 
 // Add this define after the other defines in the USER-DEFINED SETTINGS section
 #define ASSET_ID_TO_OPT_IN 733709260UL  // Asset ID to opt into
+
+// Add this define for Application NoOp transaction
+#define APPLICATION_ID_FOR_NOOP 51UL  // Application ID for NoOp calls
 #define APPLICATION_ID_TO_OPT_IN 738608433UL  // Application ID to opt into
 
 // Sample labels for your data:
@@ -501,6 +504,12 @@ void loop()
       // of an Algorand payment transaction. This way, our data will be written in the blockchain
       // The Note field of an Algorand transaction is quite short and there is some format overhead
       // (JSON), so we need to keep data and labels as short as possible
+      
+      // NOTE: You can also call other transaction types here:
+      // - submitApplicationNoOp() - for Application NoOp transactions
+      // - submitAssetOptIn() - for Asset Opt-in transactions  
+      // - submitApplicationOptIn() - for Application Opt-in transactions
+      // - submitAssetCreation() - for Asset Creation transactions
 
       #ifdef SERIAL_DEBUGMODE
       DEBUG_SERIAL.println("Data OK, ready to be encoded\n");
@@ -578,7 +587,7 @@ void loop()
 
 void waitForever()
 {
-  while(1)e:\Users\testi\Documents\Arduino\test-dino\Algo\AlgoIoT.cpp
+  while(1)
     delay(ULONG_MAX);
 }
 
@@ -644,4 +653,97 @@ int readSensors(float* temperature_C, uint8_t* relhum_Pct, uint16_t* pressure_mb
   #endif
 
   return 0;
+}
+
+// Example function to demonstrate Application NoOp transaction
+int submitApplicationNoOp()
+{
+  int iErr = 0;
+  
+  // Check for WiFi connection
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.print("Trying to connect to WiFi network for application NoOp "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
+  #endif
+  
+  if((g_wifiMulti.run() == WL_CONNECTED)) 
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
+    #endif
+
+    // Example 1: Simple NoOp call with no arguments
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.println("Example 1: Simple Application NoOp call");
+    #endif
+    
+    iErr = g_algoIoT.submitApplicationNoOpToAlgorand(APPLICATION_ID_FOR_NOOP);
+    if (iErr)
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Error %d submitting simple application NoOp transaction\n", iErr);
+      #endif
+      return iErr;
+    }
+    else
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Simple Application NoOp transaction successfully submitted with ID = %s\n", g_algoIoT.getTransactionID());
+      #endif
+    }
+
+    // Wait a bit before next transaction
+    delay(2000);
+
+    // Example 2: NoOp call with application arguments
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.println("Example 2: Application NoOp call with arguments");
+    #endif
+    
+    // Prepare application arguments
+    const char* appArgs[] = {"docs", "1"};
+    uint8_t appArgsCount = 2;
+    
+    // Prepare foreign assets (example)
+    const uint64_t foreignAssets[] = {16};
+    uint8_t foreignAssetsCount = 1;
+    
+    // Prepare foreign apps (example)
+    const uint64_t foreignApps[] = {10};
+    uint8_t foreignAppsCount = 1;
+    
+    // Prepare accounts (example - using a testnet address)
+    const char* accounts[] = {"4RLXQGPZVVRSXQF4VKZ74I6BCUD7TUVROOUBCVRKY37LQSHXORZV4KCAP4"};
+    uint8_t accountsCount = 1;
+    
+    iErr = g_algoIoT.submitApplicationNoOpToAlgorand(
+      APPLICATION_ID_FOR_NOOP,
+      appArgs, appArgsCount,
+      foreignAssets, foreignAssetsCount,
+      foreignApps, foreignAppsCount,
+      accounts, accountsCount
+    );
+    
+    if (iErr)
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Error %d submitting application NoOp transaction with arguments\n", iErr);
+      #endif
+      return iErr;
+    }
+    else
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Application NoOp transaction with arguments successfully submitted with ID = %s\n", g_algoIoT.getTransactionID());
+      #endif
+    }
+
+    return 0;
+  }
+  else
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.println("WiFi not connected, cannot submit application NoOp transaction");
+    #endif
+    return 1;
+  }
 }
