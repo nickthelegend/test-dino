@@ -92,7 +92,7 @@
 #define DEFAULT_APPLICATION_NOOP_ID 51 // Default application ID for NoOp calls
 #define ALGORAND_ASSET_OPTOUT_MIN_FIELDS 10 // Fields for asset opt-out: aclose, arcv, fee, fv, gen, gh, lv, snd, type, xaid
 #define ALGORAND_ASSET_FREEZE_MIN_FIELDS 10 // Fields for asset freeze: afrz, fadd, faid, fee, fv, gen, gh, lv, snd, type
-#define ALGORAND_ASSET_DESTROY_MIN_FIELDS 7 // Fields for asset destroy: caid, fee, fv, gen, gh, lv, snd, type
+#define ALGORAND_ASSET_DESTROY_MIN_FIELDS 8 // Fields for asset destroy: caid, fee, fv, gen, gh, lv, snd, type
 
 
 // Error codes
