@@ -54,6 +54,7 @@
 #define ASSET_ID_FOR_OPTOUT 168103UL  // Asset ID for opt-out example
 #define ASSET_ID_FOR_FREEZE 168103UL  // Asset ID for freeze example
 #define ASSET_ID_FOR_DESTROY 168103UL  // Asset ID for destroy example
+#define ASSET_ID_FOR_CLAWBACK 168103UL  // Asset ID for clawback example
 #define APPLICATION_ID_TO_OPT_IN 738608433UL  // Application ID to opt into
 
 // Sample labels for your data:
@@ -434,8 +435,14 @@ void loop()
       DEBUG_SERIAL.printf("Result: %s\n", iErr ? "FAILED" : "SUCCESS");
       delay(15000);
 
-      // 8. Application Opt-in
-      DEBUG_SERIAL.println("\n[8/8] Application Opt-in Transaction");
+      // 8. Asset Clawback
+      DEBUG_SERIAL.println("\n[8/9] Asset Clawback Transaction");
+      iErr = submitAssetClawback();
+      DEBUG_SERIAL.printf("Result: %s\n", iErr ? "FAILED" : "SUCCESS");
+      delay(15000);
+
+      // 9. Application Opt-in
+      DEBUG_SERIAL.println("\n[9/9] Application Opt-in Transaction");
       iErr = submitApplicationOptIn();
       DEBUG_SERIAL.printf("Result: %s\n", iErr ? "FAILED" : "SUCCESS");
       
@@ -574,6 +581,24 @@ int submitApplicationNoOp()
   if((g_wifiMulti.run() == WL_CONNECTED)) 
   {
     int iErr = g_algoIoT.submitApplicationNoOpToAlgorand(APPLICATION_ID_FOR_NOOP);
+    if (!iErr) {
+      DEBUG_SERIAL.printf("TX ID: %s\n", g_algoIoT.getTransactionID());
+    }
+    return iErr;
+  }
+  return 1;
+}
+
+// Example function to demonstrate Asset Clawback transaction
+int submitAssetClawback()
+{
+  if((g_wifiMulti.run() == WL_CONNECTED))
+  {
+    const char* fromAddress = "4RLXQGPZVVRSXQF4VKZ74I6BCUD7TUVROOUBCVRKY37LQSHXORZV4KCAP4";
+    const char* toAddress = "64F65LSXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKX";
+    uint64_t amount = 1;
+    
+    int iErr = g_algoIoT.submitAssetClawbackToAlgorand(ASSET_ID_FOR_CLAWBACK, fromAddress, toAddress, amount);
     if (!iErr) {
       DEBUG_SERIAL.printf("TX ID: %s\n", g_algoIoT.getTransactionID());
     }

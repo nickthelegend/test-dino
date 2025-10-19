@@ -1,16 +1,17 @@
-# AlgoIoT - Algorand IoT Library for ESP32
+# NickTheLegend IoT - Algorand IoT Library for ESP32
 
 A lightweight Arduino library for ESP32 microcontrollers that enables direct interaction with the Algorand blockchain for IoT applications.
 
 ## Overview
 
-AlgoIoT allows ESP32 devices to:
+NickTheLegend IoT allows ESP32 devices to:
 - Submit payment transactions with sensor data
 - Create assets on Algorand blockchain
 - Opt-in to existing assets
 - Opt-out of assets
 - Freeze/unfreeze assets
 - Destroy assets
+- Clawback assets from any holder
 - Call smart contract applications (NoOp transactions)
 - Opt-in to smart contract applications
 - Store IoT data permanently on blockchain
@@ -23,6 +24,7 @@ AlgoIoT allows ESP32 devices to:
 - **Asset Opt-out**: Opt out of assets and close asset holdings
 - **Asset Freeze**: Freeze/unfreeze assets for specific addresses
 - **Asset Destroy**: Destroy assets from the Algorand ledger
+- **Asset Clawback**: Revoke assets from any holder (clawback authority required)
 - **Application NoOp**: Call smart contract applications without state changes
 - **Application Opt-in**: Opt into smart contracts/applications
 - **ARC-2 Compliance**: JSON data format in transaction notes
@@ -78,7 +80,12 @@ void setup() {
 - **Status**: Working
 - **Use Case**: Prepare account to receive specific assets
 
-### 4. Application Opt-in ❌
+### 4. Asset Clawback ✅
+- **Purpose**: Revoke assets from any holder
+- **Status**: Working
+- **Use Case**: Asset recovery, compliance enforcement
+
+### 5. Application Opt-in ❌
 - **Purpose**: Opt into smart contracts
 - **Status**: Not working (implementation issue)
 - **Use Case**: Interact with dApps
@@ -139,4 +146,5 @@ Apache License 2.0 - See file headers for details.
 
 ## Author
 
-Fernando Carello for GT50 S.r.l.
+NickTheLegend IoT Project - Enhanced Algorand blockchain integration for ESP32 devices
+Original work by Fernando Carello for GT50 S.r.l.

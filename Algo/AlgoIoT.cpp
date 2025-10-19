@@ -4663,3 +4663,174 @@ int AlgoIoT::prepareAssetDestroyMessagePack(msgPack msgPackTx,
   // End of messagepack
   return 0;
 }
+
+// Submit asset clawback transaction to Algorand network
+// Return: error code (0 = OK)
+int AlgoIoT::submitAssetClawbackToAlgorand(uint64_t assetId, const char* fromAddress, const char* toAddress, uint64_t amount)
+{
+  uint32_t fv = 0;
+  uint16_t fee = 0;
+  int iErr = 0;
+  uint8_t signature[ALGORAND_SIG_BYTES];
+  uint8_t transactionMessagePackBuffer[ALGORAND_MAX_TX_MSGPACK_SIZE];
+  msgPack msgPackTx = NULL;
+
+  int httpResCode = getAlgorandTxParams(&fv, &fee);
+  if (httpResCode != 200)
+  {
+    return ALGOIOT_NETWORK_ERROR;
+  }
+
+  msgPackTx = msgpackInit(&(transactionMessagePackBuffer[0]), ALGORAND_MAX_TX_MSGPACK_SIZE);
+  if (msgPackTx == NULL)  
+  {
+    return ALGOIOT_MESSAGEPACK_ERROR;
+  }  
+  
+  iErr = prepareAssetClawbackMessagePack(msgPackTx, fv, fee, assetId, fromAddress, toAddress, amount);
+  if (iErr)
+  {
+    return ALGOIOT_MESSAGEPACK_ERROR;
+  }
+
+  iErr = signMessagePackAddingPrefix(msgPackTx, &(signature[0]));
+  if (iErr)
+  {
+    return ALGOIOT_SIGNATURE_ERROR;
+  }
+
+  iErr = createSignedBinaryTransaction(msgPackTx, signature);
+  if (iErr)
+  {
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  }
+
+  iErr = submitTransaction(msgPackTx);
+  if (iErr != 200)
+  {
+    return ALGOIOT_TRANSACTION_ERROR;
+  }
+  
+  return ALGOIOT_NO_ERROR;
+}
+
+// Prepares an asset clawback transaction MessagePack
+int AlgoIoT::prepareAssetClawbackMessagePack(msgPack msgPackTx,
+                                  const uint32_t lastRound, 
+                                  const uint16_t fee,
+                                  const uint64_t assetId,
+                                  const char* fromAddress,
+                                  const char* toAddress,
+                                  uint64_t amount)
+{ 
+  int iErr = 0;
+  char gen[ALGORAND_NETWORK_ID_CHARS + 1] = "";
+  uint32_t lv = lastRound + ALGORAND_MAX_WAIT_ROUNDS;
+  uint8_t nFields = ALGORAND_ASSET_CLAWBACK_MIN_FIELDS;
+
+  if (msgPackTx == NULL || (lastRound == 0) || (fee == 0))
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  
+  if (m_networkType == ALGORAND_TESTNET)
+  {
+    strncpy(gen, ALGORAND_TESTNET_ID, ALGORAND_NETWORK_ID_CHARS);
+    iErr = decodeAlgorandNetHash(ALGORAND_TESTNET_HASH, m_netHash);
+  }
+  else
+  {
+    strncpy(gen, ALGORAND_MAINNET_ID, ALGORAND_NETWORK_ID_CHARS);
+    iErr = decodeAlgorandNetHash(ALGORAND_MAINNET_HASH, m_netHash);
+  }
+  if (iErr) return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  gen[ALGORAND_NETWORK_ID_CHARS] = '\0';
+
+  iErr = msgPackModifyCurrentPosition(msgPackTx, BLANK_MSGPACK_HEADER);
+  if (iErr) return 5;
+
+  iErr = msgpackAddShortMap(msgPackTx, nFields);
+  if (iErr) return 5;
+
+  // "aamt" - Asset amount
+  iErr = msgpackAddShortString(msgPackTx, "aamt");
+  if (iErr) return 5;
+  if (amount <= 0xFFFFFFFF) {
+    iErr = msgpackAddUInt32(msgPackTx, (uint32_t)amount);
+  } else {
+    iErr = msgpackAddUInt64(msgPackTx, amount);
+  }
+  if (iErr) return 5;
+
+  // "arcv" - Asset receiver
+  iErr = msgpackAddShortString(msgPackTx, "arcv");
+  if (iErr) return 5;
+  uint8_t* toAddressBytes = NULL;
+  iErr = decodeAlgorandAddress(toAddress, toAddressBytes);
+  if (iErr) return 5;
+  iErr = msgpackAddShortByteArray(msgPackTx, toAddressBytes, ALGORAND_ADDRESS_BYTES);
+  free(toAddressBytes);
+  if (iErr) return 5;
+
+  // "asnd" - Asset sender (clawed back from)
+  iErr = msgpackAddShortString(msgPackTx, "asnd");
+  if (iErr) return 5;
+  uint8_t* fromAddressBytes = NULL;
+  iErr = decodeAlgorandAddress(fromAddress, fromAddressBytes);
+  if (iErr) return 5;
+  iErr = msgpackAddShortByteArray(msgPackTx, fromAddressBytes, ALGORAND_ADDRESS_BYTES);
+  free(fromAddressBytes);
+  if (iErr) return 5;
+
+  // "fee"
+  iErr = msgpackAddShortString(msgPackTx, "fee");
+  if (iErr) return 5;
+  iErr = msgpackAddUInt16(msgPackTx, fee);
+  if (iErr) return 5;
+
+  // "fv"
+  iErr = msgpackAddShortString(msgPackTx, "fv");
+  if (iErr) return 5;
+  iErr = msgpackAddUInt32(msgPackTx, lastRound);
+  if (iErr) return 5;
+
+  // "gen"
+  iErr = msgpackAddShortString(msgPackTx, "gen");
+  if (iErr) return 5;
+  iErr = msgpackAddShortString(msgPackTx, gen);
+  if (iErr) return 5;
+
+  // "gh"
+  iErr = msgpackAddShortString(msgPackTx, "gh");
+  if (iErr) return 5;
+  iErr = msgpackAddShortByteArray(msgPackTx, m_netHash, ALGORAND_NET_HASH_BYTES);
+  if (iErr) return 5;
+
+  // "lv"
+  iErr = msgpackAddShortString(msgPackTx, "lv");
+  if (iErr) return 5;
+  iErr = msgpackAddUInt32(msgPackTx, lv);
+  if (iErr) return 5;
+
+  // "snd" - Transaction sender (clawback address)
+  iErr = msgpackAddShortString(msgPackTx, "snd");
+  if (iErr) return 5;
+  iErr = msgpackAddShortByteArray(msgPackTx, m_senderAddressBytes, ALGORAND_ADDRESS_BYTES);
+  if (iErr) return 5;
+
+  // "type"
+  iErr = msgpackAddShortString(msgPackTx, "type");
+  if (iErr) return 5;
+  iErr = msgpackAddShortString(msgPackTx, "axfer");
+  if (iErr) return 5;
+
+  // "xaid" - Asset ID
+  iErr = msgpackAddShortString(msgPackTx, "xaid");
+  if (iErr) return 5;
+  if (assetId <= 0xFFFFFFFF) {
+    iErr = msgpackAddUInt32(msgPackTx, (uint32_t)assetId);
+  } else {
+    iErr = msgpackAddUInt64(msgPackTx, assetId);
+  }
+  if (iErr) return 5;
+  
+  return 0;
+}

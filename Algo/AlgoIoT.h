@@ -88,11 +88,12 @@
 // Add these constants after the existing constants
 #define ALGORAND_ASSET_CREATION_MIN_FIELDS 10 // Fields for asset creation: apar, fee, fv, gen, gh, lv, snd, type
 #define DEFAULT_ASSET_TOTAL 1 // Default total supply for created assets
-#define ALGORAND_APPLICATION_NOOP_MIN_FIELDS 7 // Fields for application NoOp: apid, fee, fv, gen, gh, lv, snd, type (minimum fields)
+#define ALGORAND_APPLICATION_NOOP_MIN_FIELDS 8 // Fields for application NoOp: apid, fee, fv, gen, gh, lv, snd, type (minimum fields)
 #define DEFAULT_APPLICATION_NOOP_ID 51 // Default application ID for NoOp calls
 #define ALGORAND_ASSET_OPTOUT_MIN_FIELDS 10 // Fields for asset opt-out: aclose, arcv, fee, fv, gen, gh, lv, snd, type, xaid
 #define ALGORAND_ASSET_FREEZE_MIN_FIELDS 10 // Fields for asset freeze: afrz, fadd, faid, fee, fv, gen, gh, lv, snd, type
 #define ALGORAND_ASSET_DESTROY_MIN_FIELDS 8 // Fields for asset destroy: caid, fee, fv, gen, gh, lv, snd, type
+#define ALGORAND_ASSET_CLAWBACK_MIN_FIELDS 11 // Fields for asset clawback: aamt, arcv, asnd, fee, fv, gen, gh, lv, snd, type, xaid
 
 
 // Error codes
@@ -258,6 +259,17 @@ class AlgoIoT
     const uint16_t fee,
     const uint64_t assetId);
 
+  // Prepares an asset clawback transaction MessagePack
+  // Returns error code (0 = OK)
+  int prepareAssetClawbackMessagePack(
+    msgPack msgPackTx,
+    const uint32_t lastRound, 
+    const uint16_t fee,
+    const uint64_t assetId,
+    const char* fromAddress,
+    const char* toAddress,
+    uint64_t amount);
+
 
   public:
 
@@ -356,6 +368,14 @@ class AlgoIoT
     const uint64_t* foreignAssets = NULL, uint8_t foreignAssetsCount = 0,
     const uint64_t* foreignApps = NULL, uint8_t foreignAppsCount = 0,
     const char** accounts = NULL, uint8_t accountsCount = 0);
+
+  // Submit asset clawback transaction to Algorand network
+  // Return: error code (0 = OK)
+  int submitAssetClawbackToAlgorand(
+    uint64_t assetId,
+    const char* fromAddress,
+    const char* toAddress,
+    uint64_t amount);
 
 
 
