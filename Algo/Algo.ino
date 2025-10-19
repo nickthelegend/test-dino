@@ -160,139 +160,49 @@ void debugMessagePackAtPosition(uint32_t position) {
 // Modify the submitAssetOptIn function to include additional debugging
 int submitAssetOptIn()
 {
-  int iErr = 0;
-
-  #ifdef SERIAL_DEBUGMODE
-  DEBUG_SERIAL.println("=== submitAssetOptIn() function called ===");
-  #endif
-  
-  // Check for WiFi connection
-  #ifdef SERIAL_DEBUGMODE
-  DEBUG_SERIAL.print("Trying to connect to WiFi network for asset opt-in "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-  #endif
-  
   if((g_wifiMulti.run() == WL_CONNECTED)) 
   {
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-    DEBUG_SERIAL.printf("Submitting asset opt-in transaction for asset ID: %llu...\n", ASSET_ID_TO_OPT_IN);
-    #endif
-
-    // Submit asset opt-in transaction
-    iErr = g_algoIoT.submitAssetOptInToAlgorand(ASSET_ID_TO_OPT_IN);
-    if (iErr)
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Error %d submitting asset opt-in transaction (Asset ID %llu might not exist or already opted in)\n", iErr, ASSET_ID_TO_OPT_IN);
-      #endif
-      // Don't return error, just skip this transaction type
-      return 0; // Return success to continue cycling
+    int iErr = g_algoIoT.submitAssetOptInToAlgorand(ASSET_ID_TO_OPT_IN);
+    if (!iErr) {
+      DEBUG_SERIAL.printf("TX ID: %s\n", g_algoIoT.getTransactionID());
     }
-    else
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("\t*** Asset opt-in transaction successfully submitted with ID = %s ***\n\n", g_algoIoT.getTransactionID());
-      #endif
-      return 0;
-    }
+    return iErr;
   }
-  
-  // WiFi connection not established
-  return ALGOIOT_NETWORK_ERROR;
+  return 1;
 }
 
 // Add this function after the submitAssetOptIn function
 int submitApplicationOptIn()
 {
-  int iErr = 0;
-
-  #ifdef SERIAL_DEBUGMODE
-  DEBUG_SERIAL.println("=== submitApplicationOptIn() function called ===");
-  #endif
-  
-  // Check for WiFi connection
-  #ifdef SERIAL_DEBUGMODE
-  DEBUG_SERIAL.print("Trying to connect to WiFi network for application opt-in "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-  #endif
-  
   if((g_wifiMulti.run() == WL_CONNECTED)) 
   {
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-    DEBUG_SERIAL.printf("Submitting application opt-in transaction for application ID: %llu...\n", APPLICATION_ID_TO_OPT_IN);
-    #endif
-
-    // Submit application opt-in transaction
-    iErr = g_algoIoT.submitApplicationOptInToAlgorand(APPLICATION_ID_TO_OPT_IN);
-    if (iErr)
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Error %d submitting application opt-in transaction (Application ID %llu might not exist or already opted in)\n", iErr, APPLICATION_ID_TO_OPT_IN);
-      #endif
-      // Don't return error, just skip this transaction type
-      return 0; // Return success to continue cycling
+    int iErr = g_algoIoT.submitApplicationOptInToAlgorand(APPLICATION_ID_TO_OPT_IN);
+    if (!iErr) {
+      DEBUG_SERIAL.printf("TX ID: %s\n", g_algoIoT.getTransactionID());
     }
-    else
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("\t*** Application opt-in transaction successfully submitted with ID = %s ***\n\n", g_algoIoT.getTransactionID());
-      #endif
-      return 0;
-    }
+    return iErr;
   }
-  
-  // WiFi connection not established
-  return ALGOIOT_NETWORK_ERROR;
+  return 1;
 }
 
 // Add this function after the submitApplicationOptIn function
 int submitAssetCreation()
 {
-  int iErr = 0;
-  static uint32_t assetCounter = 0; // Static counter to create unique assets
-  
-  // Check for WiFi connection
-  #ifdef SERIAL_DEBUGMODE
-  DEBUG_SERIAL.print("Trying to connect to WiFi network for asset creation "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-  #endif
-  
   if((g_wifiMulti.run() == WL_CONNECTED)) 
   {
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-    #endif
-
-    // Create unique asset name and parameters to avoid duplicates
+    static uint32_t assetCounter = 0;
     assetCounter++;
-    char assetName[32];
-    char unitName[8];
+    char assetName[32], unitName[8];
     snprintf(assetName, sizeof(assetName), "TestAsset_%u", assetCounter);
-    snprintf(unitName, sizeof(unitName), "TST%u", assetCounter % 1000); // Keep unit name short
+    snprintf(unitName, sizeof(unitName), "TST%u", assetCounter % 1000);
 
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.printf("Creating unique asset: %s (%s)\n", assetName, unitName);
-    #endif
-
-    // Submit asset creation transaction with unique parameters
-    iErr = g_algoIoT.submitAssetCreationToAlgorand(assetName, unitName, "https://example.com", 0, 1000000);
-    if (iErr)
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Error %d submitting asset creation transaction\n", iErr);
-      #endif
-      return iErr;
+    int iErr = g_algoIoT.submitAssetCreationToAlgorand(assetName, unitName, "https://example.com", 0, 1000000);
+    if (!iErr) {
+      DEBUG_SERIAL.printf("TX ID: %s\n", g_algoIoT.getTransactionID());
     }
-    else
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("\t*** Asset creation transaction successfully submitted with ID = %s ***\n\n", g_algoIoT.getTransactionID());
-      #endif
-      return 0;
-    }
+    return iErr;
   }
-  
-  // WiFi connection not established
-  return ALGOIOT_NETWORK_ERROR;
+  return 1;
 }
 
 // Add this helper function to your Algo.ino file to verify the mnemonic conversion
@@ -451,28 +361,13 @@ void loop()
   float tempC = 0.0f;
   uint16_t pmbar = 0;
 
-  // Check for WiFi connection
-  #ifdef SERIAL_DEBUGMODE
-  DEBUG_SERIAL.print("Trying to connect to WiFi network "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-  #endif
-  
   if((g_wifiMulti.run() == WL_CONNECTED)) 
   {
     int iErr = 0;
 
-    #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-    #endif
-
     iErr = readSensors(&tempC, &rhPct, &pmbar);
-    if (iErr)
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Error %d reading sensors\n", iErr);
-      #endif
-    }
-    else
-    { // readsensors OK
+    if (!iErr)
+    { // sensors OK
       float lat = 0.0f;
       float lon = 0.0f;
       int16_t alt = 0;
@@ -480,202 +375,71 @@ void loop()
       uint8_t positionNotSpecified = readPosition(&lat, &lon, &alt);
 
       if (!positionNotSpecified)
-      { // Add user-defined position
-        iErr = g_algoIoT.dataAddFloatField(LAT_LABEL, lat);
-        if (iErr)
-        {
-          #ifdef TINYPICO
-          // Turn on error LED if on TinyPICO
-          g_tp.DotStar_SetPixelColor(LED_COLOR_RED);
-          #endif
-          #ifdef SERIAL_DEBUGMODE
-          DEBUG_SERIAL.printf("Error %d adding Latitude field\n", iErr);
-          #endif
-          waitForever();
-        }
-        iErr = g_algoIoT.dataAddFloatField(LON_LABEL, lon);
-        if (iErr)
-        {
-          #ifdef TINYPICO
-          // Turn on error LED if on TinyPICO
-          g_tp.DotStar_SetPixelColor(LED_COLOR_RED);
-          #endif
-          #ifdef SERIAL_DEBUGMODE
-          DEBUG_SERIAL.printf("Error %d adding Longitude field\n", iErr);
-          #endif
-          waitForever();
-        }
-        iErr = g_algoIoT.dataAddInt16Field(ALT_LABEL, alt);
-        if (iErr)
-        {
-          #ifdef TINYPICO
-          // Turn on error LED if on TinyPICO
-          g_tp.DotStar_SetPixelColor(LED_COLOR_RED);
-          #endif
-          #ifdef SERIAL_DEBUGMODE
-          DEBUG_SERIAL.printf("Error %d adding Elevation field\n", iErr);
-          #endif
-          waitForever();
-        }
+      {
+        g_algoIoT.dataAddFloatField(LAT_LABEL, lat);
+        g_algoIoT.dataAddFloatField(LON_LABEL, lon);
+        g_algoIoT.dataAddInt16Field(ALT_LABEL, alt);
       }
-
-      // Now we format our data in a format suitable to be submitted as a Note field
-      // of an Algorand payment transaction. This way, our data will be written in the blockchain
-      // The Note field of an Algorand transaction is quite short and there is some format overhead
-      // (JSON), so we need to keep data and labels as short as possible
       
-      // Execute all transaction types sequentially with delays
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.println("=== Starting All Transaction Types ===");
-      #endif
+      // Execute all transaction types sequentially
+      DEBUG_SERIAL.println("\n========== ALGORAND TRANSACTION EXECUTION ==========\n");
 
-      // 1. Payment Transaction with sensor data
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.println("1. Executing: Payment Transaction with sensor data");
-      #endif
-      // Add node serial number
+      // 1. Payment Transaction
+      DEBUG_SERIAL.println("[1/8] Payment Transaction");
       iErr = g_algoIoT.dataAddUInt32Field(SN_LABEL, NODE_SERIAL_NUMBER);
-      if (iErr)
-      {
-        #ifdef SERIAL_DEBUGMODE
-        DEBUG_SERIAL.printf("Error %d adding Serial Number field\n", iErr);
-        #endif
-        waitForever();
-      }
-
-      // Add sensor data
-      iErr = g_algoIoT.dataAddFloatField(T_LABEL, tempC);
-      if (iErr)
-      {
-        #ifdef SERIAL_DEBUGMODE
-        DEBUG_SERIAL.printf("Error %d adding Temperature field\n", iErr);
-        #endif
-        waitForever();
-      }
-      iErr = g_algoIoT.dataAddUInt8Field(H_LABEL, rhPct);
-      if (iErr)
-      {
-        #ifdef SERIAL_DEBUGMODE
-        DEBUG_SERIAL.printf("Error %d adding Humidity field\n", iErr);
-        #endif
-        waitForever();
-      }
-      iErr = g_algoIoT.dataAddInt16Field(P_LABEL, pmbar);
-      if (iErr)
-      {
-        #ifdef SERIAL_DEBUGMODE
-        DEBUG_SERIAL.printf("Error %d adding Pressure field\n", iErr);
-        #endif
-        waitForever();
-      }
-
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.println("Data encoded, ready to be submitted to the blockchain\n");
-      #endif
-
-      // Data added to structure. Now we can submit our transaction to the blockchain
-      iErr = g_algoIoT.submitTransactionToAlgorand();
-      if (iErr)
-      {
-        #ifdef SERIAL_DEBUGMODE
-        DEBUG_SERIAL.printf("Error %d submitting transaction to Algorand blockchain\n", iErr);
-        #endif
-      }
-      else
-      {
-        #ifdef SERIAL_DEBUGMODE
-        DEBUG_SERIAL.printf("\t*** Payment transaction successfully submitted with ID = %s ***\n\n", g_algoIoT.getTransactionID());
-        #endif
-      }
+      iErr |= g_algoIoT.dataAddFloatField(T_LABEL, tempC);
+      iErr |= g_algoIoT.dataAddUInt8Field(H_LABEL, rhPct);
+      iErr |= g_algoIoT.dataAddInt16Field(P_LABEL, pmbar);
       
-      delay(15000); // Wait 15 seconds between transactions
+      if (!iErr) {
+        iErr = g_algoIoT.submitTransactionToAlgorand();
+        DEBUG_SERIAL.printf("Result: %s\n", iErr ? "FAILED" : "SUCCESS");
+        if (!iErr) DEBUG_SERIAL.printf("TX ID: %s\n", g_algoIoT.getTransactionID());
+      }
+      delay(15000);
 
-      // 2. Asset Creation Transaction
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.println("2. Executing: Asset Creation Transaction");
-      #endif
+      // 2. Asset Creation
+      DEBUG_SERIAL.println("\n[2/8] Asset Creation Transaction");
       iErr = submitAssetCreation();
-      if (iErr) {
-        #ifdef SERIAL_DEBUGMODE
-        DEBUG_SERIAL.printf("Error %d in Asset Creation transaction\n", iErr);
-        #endif
-      }
+      DEBUG_SERIAL.printf("Result: %s\n", iErr ? "FAILED" : "SUCCESS");
       delay(15000);
 
-      // 3. Asset Opt-in Transaction
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.println("3. Executing: Asset Opt-in Transaction");
-      #endif
+      // 3. Asset Opt-in
+      DEBUG_SERIAL.println("\n[3/8] Asset Opt-in Transaction");
       iErr = submitAssetOptIn();
-      if (iErr) {
-        #ifdef SERIAL_DEBUGMODE
-        DEBUG_SERIAL.printf("Error %d in Asset Opt-in transaction\n", iErr);
-        #endif
-      }
+      DEBUG_SERIAL.printf("Result: %s\n", iErr ? "FAILED" : "SUCCESS");
       delay(15000);
 
-      // 4. Asset Opt-out Transaction
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.println("4. Executing: Asset Opt-out Transaction");
-      #endif
+      // 4. Asset Opt-out
+      DEBUG_SERIAL.println("\n[4/8] Asset Opt-out Transaction");
       iErr = submitAssetOptOut();
-      if (iErr) {
-        #ifdef SERIAL_DEBUGMODE
-        DEBUG_SERIAL.printf("Error %d in Asset Opt-out transaction\n", iErr);
-        #endif
-      }
+      DEBUG_SERIAL.printf("Result: %s\n", iErr ? "FAILED" : "SUCCESS");
       delay(15000);
 
-      // 5. Asset Freeze Transaction
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.println("5. Executing: Asset Freeze Transaction");
-      #endif
+      // 5. Asset Freeze
+      DEBUG_SERIAL.println("\n[5/8] Asset Freeze Transaction");
       iErr = submitAssetFreeze();
-      if (iErr) {
-        #ifdef SERIAL_DEBUGMODE
-        DEBUG_SERIAL.printf("Error %d in Asset Freeze transaction\n", iErr);
-        #endif
-      }
+      DEBUG_SERIAL.printf("Result: %s\n", iErr ? "FAILED" : "SUCCESS");
       delay(15000);
 
-      // 6. Asset Destroy Transaction
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.println("6. Executing: Asset Destroy Transaction");
-      #endif
+      // 6. Asset Destroy
+      DEBUG_SERIAL.println("\n[6/8] Asset Destroy Transaction");
       iErr = submitAssetDestroy();
-      if (iErr) {
-        #ifdef SERIAL_DEBUGMODE
-        DEBUG_SERIAL.printf("Error %d in Asset Destroy transaction\n", iErr);
-        #endif
-      }
+      DEBUG_SERIAL.printf("Result: %s\n", iErr ? "FAILED" : "SUCCESS");
       delay(15000);
 
-      // 7. Application NoOp Transaction
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.println("7. Executing: Application NoOp Transaction");
-      #endif
+      // 7. Application NoOp
+      DEBUG_SERIAL.println("\n[7/8] Application NoOp Transaction");
       iErr = submitApplicationNoOp();
-      if (iErr) {
-        #ifdef SERIAL_DEBUGMODE
-        DEBUG_SERIAL.printf("Error %d in Application NoOp transaction\n", iErr);
-        #endif
-      }
+      DEBUG_SERIAL.printf("Result: %s\n", iErr ? "FAILED" : "SUCCESS");
       delay(15000);
 
-      // 8. Application Opt-in Transaction
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.println("8. Executing: Application Opt-in Transaction");
-      #endif
+      // 8. Application Opt-in
+      DEBUG_SERIAL.println("\n[8/8] Application Opt-in Transaction");
       iErr = submitApplicationOptIn();
-      if (iErr) {
-        #ifdef SERIAL_DEBUGMODE
-        DEBUG_SERIAL.printf("Error %d in Application Opt-in transaction\n", iErr);
-        #endif
-      }
+      DEBUG_SERIAL.printf("Result: %s\n", iErr ? "FAILED" : "SUCCESS");
       
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.println("=== All Transaction Types Completed ===");
-      #endif
+      DEBUG_SERIAL.println("\n========== ALL TRANSACTIONS COMPLETED ==========\n");
     }
     // Wait for next data upload
     delay(DATA_SEND_INTERVAL);
@@ -764,306 +528,56 @@ int readSensors(float* temperature_C, uint8_t* relhum_Pct, uint16_t* pressure_mb
 // Example function to demonstrate Asset Opt-Out transaction
 int submitAssetOptOut()
 {
-  int iErr = 0;
-
-  #ifdef SERIAL_DEBUGMODE
-  DEBUG_SERIAL.println("=== submitAssetOptOut() function called ===");
-  #endif
-
-  // Check for WiFi connection
-  #ifdef SERIAL_DEBUGMODE
-  DEBUG_SERIAL.print("Trying to connect to WiFi network for asset opt-out "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-  #endif
-
   if((g_wifiMulti.run() == WL_CONNECTED))
   {
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-    #endif
-
-    // Example 1: Simple asset opt-out with sender as close-to address
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.println("Example 1: Simple Asset Opt-Out");
-    #endif
-
-    iErr = g_algoIoT.submitAssetOptOutToAlgorand(ASSET_ID_FOR_OPTOUT);
-    if (iErr)
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Error %d submitting simple asset opt-out transaction (Asset ID %llu might not exist or not opted in)\n", iErr, ASSET_ID_FOR_OPTOUT);
-      #endif
-      // Don't return error, just skip this transaction type
-      return 0; // Return success to continue cycling
+    int iErr = g_algoIoT.submitAssetOptOutToAlgorand(ASSET_ID_FOR_OPTOUT);
+    if (!iErr) {
+      DEBUG_SERIAL.printf("TX ID: %s\n", g_algoIoT.getTransactionID());
     }
-    else
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Simple Asset Opt-Out transaction successfully submitted with ID = %s\n", g_algoIoT.getTransactionID());
-      #endif
-    }
-
-    // Wait a bit before next transaction
-    delay(2000);
-
-    // Example 2: Asset opt-out with specific close-to address
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.println("Example 2: Asset Opt-Out with specific close-to address");
-    #endif
-
-    // Use a specific address to receive the remaining asset balance
-    const char* closeToAddress = "4RLXQGPZVVRSXQF4VKZ74I6BCUD7TUVROOUBCVRKY37LQSHXORZV4KCAP4";
-
-    iErr = g_algoIoT.submitAssetOptOutToAlgorand(ASSET_ID_FOR_OPTOUT, closeToAddress);
-
-    if (iErr)
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Error %d submitting asset opt-out transaction with close-to address\n", iErr);
-      #endif
-      return iErr;
-    }
-    else
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Asset Opt-Out transaction with close-to address successfully submitted with ID = %s\n", g_algoIoT.getTransactionID());
-      #endif
-    }
-
-    return 0;
+    return iErr;
   }
-  else
-  {
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.println("WiFi not connected, cannot submit asset opt-out transaction");
-    #endif
-    return 1;
-  }
+  return 1;
 }
 
 // Example function to demonstrate Asset Freeze transaction
 int submitAssetFreeze()
 {
-  int iErr = 0;
-
-  #ifdef SERIAL_DEBUGMODE
-  DEBUG_SERIAL.println("=== submitAssetFreeze() function called ===");
-  #endif
-
-  // Check for WiFi connection
-  #ifdef SERIAL_DEBUGMODE
-  DEBUG_SERIAL.print("Trying to connect to WiFi network for asset freeze "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-  #endif
-
   if((g_wifiMulti.run() == WL_CONNECTED))
   {
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-    #endif
-
-    // Example 1: Freeze an asset for a specific address
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.println("Example 1: Freeze Asset");
-    #endif
-
     const char* freezeAddress = "4RLXQGPZVVRSXQF4VKZ74I6BCUD7TUVROOUBCVRKY37LQSHXORZV4KCAP4";
-
-    iErr = g_algoIoT.submitAssetFreezeToAlgorand(ASSET_ID_FOR_FREEZE, freezeAddress, true);
-    if (iErr)
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Error %d submitting asset freeze transaction (Asset ID %llu might not exist or no freeze permissions)\n", iErr, ASSET_ID_FOR_FREEZE);
-      #endif
-      // Don't return error, just skip this transaction type
-      return 0; // Return success to continue cycling
+    int iErr = g_algoIoT.submitAssetFreezeToAlgorand(ASSET_ID_FOR_FREEZE, freezeAddress, true);
+    if (!iErr) {
+      DEBUG_SERIAL.printf("TX ID: %s\n", g_algoIoT.getTransactionID());
     }
-    else
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Asset Freeze transaction successfully submitted with ID = %s\n", g_algoIoT.getTransactionID());
-      #endif
-    }
-
-    // Wait a bit before next transaction
-    delay(2000);
-
-    // Example 2: Unfreeze an asset for a specific address
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.println("Example 2: Unfreeze Asset");
-    #endif
-
-    iErr = g_algoIoT.submitAssetFreezeToAlgorand(ASSET_ID_FOR_FREEZE, freezeAddress, false);
-
-    if (iErr)
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Error %d submitting asset unfreeze transaction\n", iErr);
-      #endif
-      return iErr;
-    }
-    else
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Asset Unfreeze transaction successfully submitted with ID = %s\n", g_algoIoT.getTransactionID());
-      #endif
-    }
-
-    return 0;
+    return iErr;
   }
-  else
-  {
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.println("WiFi not connected, cannot submit asset freeze transaction");
-    #endif
-    return 1;
-  }
+  return 1;
 }
 
 // Example function to demonstrate Asset Destroy transaction
 int submitAssetDestroy()
 {
-  int iErr = 0;
-
-  #ifdef SERIAL_DEBUGMODE
-  DEBUG_SERIAL.println("=== submitAssetDestroy() function called ===");
-  #endif
-
-  // Check for WiFi connection
-  #ifdef SERIAL_DEBUGMODE
-  DEBUG_SERIAL.print("Trying to connect to WiFi network for asset destroy "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-  #endif
-
   if((g_wifiMulti.run() == WL_CONNECTED))
   {
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-    #endif
-
-    // Example: Destroy an asset
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.println("Example: Asset Destroy");
-    #endif
-
-    iErr = g_algoIoT.submitAssetDestroyToAlgorand(ASSET_ID_FOR_DESTROY);
-    if (iErr)
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Error %d submitting asset destroy transaction (Asset ID %llu might not exist or no destroy permissions)\n", iErr, ASSET_ID_FOR_DESTROY);
-      #endif
-      // Don't return error, just skip this transaction type
-      return 0; // Return success to continue cycling
+    int iErr = g_algoIoT.submitAssetDestroyToAlgorand(ASSET_ID_FOR_DESTROY);
+    if (!iErr) {
+      DEBUG_SERIAL.printf("TX ID: %s\n", g_algoIoT.getTransactionID());
     }
-    else
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Asset Destroy transaction successfully submitted with ID = %s\n", g_algoIoT.getTransactionID());
-      #endif
-    }
-
-    return 0;
+    return iErr;
   }
-  else
-  {
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.println("WiFi not connected, cannot submit asset destroy transaction");
-    #endif
-    return 1;
-  }
+  return 1;
 }
 
 // Example function to demonstrate Application NoOp transaction
 int submitApplicationNoOp()
 {
-  int iErr = 0;
-
-  #ifdef SERIAL_DEBUGMODE
-  DEBUG_SERIAL.println("=== submitApplicationNoOp() function called ===");
-  #endif
-  
-  // Check for WiFi connection
-  #ifdef SERIAL_DEBUGMODE
-  DEBUG_SERIAL.print("Trying to connect to WiFi network for application NoOp "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-  #endif
-  
   if((g_wifiMulti.run() == WL_CONNECTED)) 
   {
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-    #endif
-
-    // Example 1: Simple NoOp call with no arguments
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.println("Example 1: Simple Application NoOp call");
-    #endif
-    
-    iErr = g_algoIoT.submitApplicationNoOpToAlgorand(APPLICATION_ID_FOR_NOOP);
-    if (iErr)
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Error %d submitting simple application NoOp transaction (Application ID %llu might not exist or not opted in)\n", iErr, APPLICATION_ID_FOR_NOOP);
-      #endif
-      // Don't return error, just skip this transaction type
-      return 0; // Return success to continue cycling
+    int iErr = g_algoIoT.submitApplicationNoOpToAlgorand(APPLICATION_ID_FOR_NOOP);
+    if (!iErr) {
+      DEBUG_SERIAL.printf("TX ID: %s\n", g_algoIoT.getTransactionID());
     }
-    else
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Simple Application NoOp transaction successfully submitted with ID = %s\n", g_algoIoT.getTransactionID());
-      #endif
-    }
-
-    // Wait a bit before next transaction
-    delay(2000);
-
-    // Example 2: NoOp call with application arguments
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.println("Example 2: Application NoOp call with arguments");
-    #endif
-    
-    // Prepare application arguments
-    const char* appArgs[] = {"docs", "1"};
-    uint8_t appArgsCount = 2;
-    
-    // Prepare foreign assets (example)
-    const uint64_t foreignAssets[] = {16};
-    uint8_t foreignAssetsCount = 1;
-    
-    // Prepare foreign apps (example)
-    const uint64_t foreignApps[] = {10};
-    uint8_t foreignAppsCount = 1;
-    
-    // Prepare accounts (example - using a testnet address)
-    const char* accounts[] = {"4RLXQGPZVVRSXQF4VKZ74I6BCUD7TUVROOUBCVRKY37LQSHXORZV4KCAP4"};
-    uint8_t accountsCount = 1;
-    
-    iErr = g_algoIoT.submitApplicationNoOpToAlgorand(
-      APPLICATION_ID_FOR_NOOP,
-      appArgs, appArgsCount,
-      foreignAssets, foreignAssetsCount,
-      foreignApps, foreignAppsCount,
-      accounts, accountsCount
-    );
-    
-    if (iErr)
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Error %d submitting application NoOp transaction with arguments\n", iErr);
-      #endif
-      return iErr;
-    }
-    else
-    {
-      #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Application NoOp transaction with arguments successfully submitted with ID = %s\n", g_algoIoT.getTransactionID());
-      #endif
-    }
-
-    return 0;
+    return iErr;
   }
-  else
-  {
-    #ifdef SERIAL_DEBUGMODE
-    DEBUG_SERIAL.println("WiFi not connected, cannot submit application NoOp transaction");
-    #endif
-    return 1;
-  }
+  return 1;
 }
