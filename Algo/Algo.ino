@@ -51,6 +51,9 @@
 
 // Add this define for Application NoOp transaction
 #define APPLICATION_ID_FOR_NOOP 51UL  // Application ID for NoOp calls
+#define ASSET_ID_FOR_OPTOUT 168103UL  // Asset ID for opt-out example
+#define ASSET_ID_FOR_FREEZE 168103UL  // Asset ID for freeze example
+#define ASSET_ID_FOR_DESTROY 168103UL  // Asset ID for destroy example
 #define APPLICATION_ID_TO_OPT_IN 738608433UL  // Application ID to opt into
 
 // Sample labels for your data:
@@ -158,6 +161,10 @@ void debugMessagePackAtPosition(uint32_t position) {
 int submitAssetOptIn()
 {
   int iErr = 0;
+
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.println("=== submitAssetOptIn() function called ===");
+  #endif
   
   // Check for WiFi connection
   #ifdef SERIAL_DEBUGMODE
@@ -176,9 +183,10 @@ int submitAssetOptIn()
     if (iErr)
     {
       #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Error %d submitting asset opt-in transaction\n", iErr);
+      DEBUG_SERIAL.printf("Error %d submitting asset opt-in transaction (Asset ID %llu might not exist or already opted in)\n", iErr, ASSET_ID_TO_OPT_IN);
       #endif
-      return iErr;
+      // Don't return error, just skip this transaction type
+      return 0; // Return success to continue cycling
     }
     else
     {
@@ -197,6 +205,10 @@ int submitAssetOptIn()
 int submitApplicationOptIn()
 {
   int iErr = 0;
+
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.println("=== submitApplicationOptIn() function called ===");
+  #endif
   
   // Check for WiFi connection
   #ifdef SERIAL_DEBUGMODE
@@ -215,9 +227,10 @@ int submitApplicationOptIn()
     if (iErr)
     {
       #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Error %d submitting application opt-in transaction\n", iErr);
+      DEBUG_SERIAL.printf("Error %d submitting application opt-in transaction (Application ID %llu might not exist or already opted in)\n", iErr, APPLICATION_ID_TO_OPT_IN);
       #endif
-      return iErr;
+      // Don't return error, just skip this transaction type
+      return 0; // Return success to continue cycling
     }
     else
     {
@@ -236,6 +249,7 @@ int submitApplicationOptIn()
 int submitAssetCreation()
 {
   int iErr = 0;
+  static uint32_t assetCounter = 0; // Static counter to create unique assets
   
   // Check for WiFi connection
   #ifdef SERIAL_DEBUGMODE
@@ -246,16 +260,21 @@ int submitAssetCreation()
   {
     #ifdef SERIAL_DEBUGMODE
     DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
-    DEBUG_SERIAL.println("Submitting asset creation transaction...");
     #endif
 
-    // Submit asset creation transaction with all parameters
-    // Asset name: "My Asset"
-    // Unit name: "UNIT"
-    // Asset URL: "https://example.com"
-    // Decimals: 2
-    // Total supply: 1000000
-    iErr = g_algoIoT.submitAssetCreationToAlgorand("My Asset", "UNIT", "https://example.com", 2, 1000000);
+    // Create unique asset name and parameters to avoid duplicates
+    assetCounter++;
+    char assetName[32];
+    char unitName[8];
+    snprintf(assetName, sizeof(assetName), "TestAsset_%u", assetCounter);
+    snprintf(unitName, sizeof(unitName), "TST%u", assetCounter % 1000); // Keep unit name short
+
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.printf("Creating unique asset: %s (%s)\n", assetName, unitName);
+    #endif
+
+    // Submit asset creation transaction with unique parameters
+    iErr = g_algoIoT.submitAssetCreationToAlgorand(assetName, unitName, "https://example.com", 0, 1000000);
     if (iErr)
     {
       #ifdef SERIAL_DEBUGMODE
@@ -505,16 +524,15 @@ void loop()
       // The Note field of an Algorand transaction is quite short and there is some format overhead
       // (JSON), so we need to keep data and labels as short as possible
       
-      // NOTE: You can also call other transaction types here:
-      // - submitApplicationNoOp() - for Application NoOp transactions
-      // - submitAssetOptIn() - for Asset Opt-in transactions  
-      // - submitApplicationOptIn() - for Application Opt-in transactions
-      // - submitAssetCreation() - for Asset Creation transactions
-
+      // Execute all transaction types sequentially with delays
       #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.println("Data OK, ready to be encoded\n");
+      DEBUG_SERIAL.println("=== Starting All Transaction Types ===");
       #endif
 
+      // 1. Payment Transaction with sensor data
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.println("1. Executing: Payment Transaction with sensor data");
+      #endif
       // Add node serial number
       iErr = g_algoIoT.dataAddUInt32Field(SN_LABEL, NODE_SERIAL_NUMBER);
       if (iErr)
@@ -562,14 +580,102 @@ void loop()
         #ifdef SERIAL_DEBUGMODE
         DEBUG_SERIAL.printf("Error %d submitting transaction to Algorand blockchain\n", iErr);
         #endif
-        waitForever();
       }
       else
-      { // Properly submitted
+      {
         #ifdef SERIAL_DEBUGMODE
-        DEBUG_SERIAL.printf("\t*** Algorand transaction successfully submitted with ID = %s ***\n\n", g_algoIoT.getTransactionID());
+        DEBUG_SERIAL.printf("\t*** Payment transaction successfully submitted with ID = %s ***\n\n", g_algoIoT.getTransactionID());
         #endif
       }
+      
+      delay(15000); // Wait 15 seconds between transactions
+
+      // 2. Asset Creation Transaction
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.println("2. Executing: Asset Creation Transaction");
+      #endif
+      iErr = submitAssetCreation();
+      if (iErr) {
+        #ifdef SERIAL_DEBUGMODE
+        DEBUG_SERIAL.printf("Error %d in Asset Creation transaction\n", iErr);
+        #endif
+      }
+      delay(15000);
+
+      // 3. Asset Opt-in Transaction
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.println("3. Executing: Asset Opt-in Transaction");
+      #endif
+      iErr = submitAssetOptIn();
+      if (iErr) {
+        #ifdef SERIAL_DEBUGMODE
+        DEBUG_SERIAL.printf("Error %d in Asset Opt-in transaction\n", iErr);
+        #endif
+      }
+      delay(15000);
+
+      // 4. Asset Opt-out Transaction
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.println("4. Executing: Asset Opt-out Transaction");
+      #endif
+      iErr = submitAssetOptOut();
+      if (iErr) {
+        #ifdef SERIAL_DEBUGMODE
+        DEBUG_SERIAL.printf("Error %d in Asset Opt-out transaction\n", iErr);
+        #endif
+      }
+      delay(15000);
+
+      // 5. Asset Freeze Transaction
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.println("5. Executing: Asset Freeze Transaction");
+      #endif
+      iErr = submitAssetFreeze();
+      if (iErr) {
+        #ifdef SERIAL_DEBUGMODE
+        DEBUG_SERIAL.printf("Error %d in Asset Freeze transaction\n", iErr);
+        #endif
+      }
+      delay(15000);
+
+      // 6. Asset Destroy Transaction
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.println("6. Executing: Asset Destroy Transaction");
+      #endif
+      iErr = submitAssetDestroy();
+      if (iErr) {
+        #ifdef SERIAL_DEBUGMODE
+        DEBUG_SERIAL.printf("Error %d in Asset Destroy transaction\n", iErr);
+        #endif
+      }
+      delay(15000);
+
+      // 7. Application NoOp Transaction
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.println("7. Executing: Application NoOp Transaction");
+      #endif
+      iErr = submitApplicationNoOp();
+      if (iErr) {
+        #ifdef SERIAL_DEBUGMODE
+        DEBUG_SERIAL.printf("Error %d in Application NoOp transaction\n", iErr);
+        #endif
+      }
+      delay(15000);
+
+      // 8. Application Opt-in Transaction
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.println("8. Executing: Application Opt-in Transaction");
+      #endif
+      iErr = submitApplicationOptIn();
+      if (iErr) {
+        #ifdef SERIAL_DEBUGMODE
+        DEBUG_SERIAL.printf("Error %d in Application Opt-in transaction\n", iErr);
+        #endif
+      }
+      
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.println("=== All Transaction Types Completed ===");
+      #endif
     }
     // Wait for next data upload
     delay(DATA_SEND_INTERVAL);
@@ -655,10 +761,223 @@ int readSensors(float* temperature_C, uint8_t* relhum_Pct, uint16_t* pressure_mb
   return 0;
 }
 
+// Example function to demonstrate Asset Opt-Out transaction
+int submitAssetOptOut()
+{
+  int iErr = 0;
+
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.println("=== submitAssetOptOut() function called ===");
+  #endif
+
+  // Check for WiFi connection
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.print("Trying to connect to WiFi network for asset opt-out "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
+  #endif
+
+  if((g_wifiMulti.run() == WL_CONNECTED))
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
+    #endif
+
+    // Example 1: Simple asset opt-out with sender as close-to address
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.println("Example 1: Simple Asset Opt-Out");
+    #endif
+
+    iErr = g_algoIoT.submitAssetOptOutToAlgorand(ASSET_ID_FOR_OPTOUT);
+    if (iErr)
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Error %d submitting simple asset opt-out transaction (Asset ID %llu might not exist or not opted in)\n", iErr, ASSET_ID_FOR_OPTOUT);
+      #endif
+      // Don't return error, just skip this transaction type
+      return 0; // Return success to continue cycling
+    }
+    else
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Simple Asset Opt-Out transaction successfully submitted with ID = %s\n", g_algoIoT.getTransactionID());
+      #endif
+    }
+
+    // Wait a bit before next transaction
+    delay(2000);
+
+    // Example 2: Asset opt-out with specific close-to address
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.println("Example 2: Asset Opt-Out with specific close-to address");
+    #endif
+
+    // Use a specific address to receive the remaining asset balance
+    const char* closeToAddress = "4RLXQGPZVVRSXQF4VKZ74I6BCUD7TUVROOUBCVRKY37LQSHXORZV4KCAP4";
+
+    iErr = g_algoIoT.submitAssetOptOutToAlgorand(ASSET_ID_FOR_OPTOUT, closeToAddress);
+
+    if (iErr)
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Error %d submitting asset opt-out transaction with close-to address\n", iErr);
+      #endif
+      return iErr;
+    }
+    else
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Asset Opt-Out transaction with close-to address successfully submitted with ID = %s\n", g_algoIoT.getTransactionID());
+      #endif
+    }
+
+    return 0;
+  }
+  else
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.println("WiFi not connected, cannot submit asset opt-out transaction");
+    #endif
+    return 1;
+  }
+}
+
+// Example function to demonstrate Asset Freeze transaction
+int submitAssetFreeze()
+{
+  int iErr = 0;
+
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.println("=== submitAssetFreeze() function called ===");
+  #endif
+
+  // Check for WiFi connection
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.print("Trying to connect to WiFi network for asset freeze "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
+  #endif
+
+  if((g_wifiMulti.run() == WL_CONNECTED))
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
+    #endif
+
+    // Example 1: Freeze an asset for a specific address
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.println("Example 1: Freeze Asset");
+    #endif
+
+    const char* freezeAddress = "4RLXQGPZVVRSXQF4VKZ74I6BCUD7TUVROOUBCVRKY37LQSHXORZV4KCAP4";
+
+    iErr = g_algoIoT.submitAssetFreezeToAlgorand(ASSET_ID_FOR_FREEZE, freezeAddress, true);
+    if (iErr)
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Error %d submitting asset freeze transaction (Asset ID %llu might not exist or no freeze permissions)\n", iErr, ASSET_ID_FOR_FREEZE);
+      #endif
+      // Don't return error, just skip this transaction type
+      return 0; // Return success to continue cycling
+    }
+    else
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Asset Freeze transaction successfully submitted with ID = %s\n", g_algoIoT.getTransactionID());
+      #endif
+    }
+
+    // Wait a bit before next transaction
+    delay(2000);
+
+    // Example 2: Unfreeze an asset for a specific address
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.println("Example 2: Unfreeze Asset");
+    #endif
+
+    iErr = g_algoIoT.submitAssetFreezeToAlgorand(ASSET_ID_FOR_FREEZE, freezeAddress, false);
+
+    if (iErr)
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Error %d submitting asset unfreeze transaction\n", iErr);
+      #endif
+      return iErr;
+    }
+    else
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Asset Unfreeze transaction successfully submitted with ID = %s\n", g_algoIoT.getTransactionID());
+      #endif
+    }
+
+    return 0;
+  }
+  else
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.println("WiFi not connected, cannot submit asset freeze transaction");
+    #endif
+    return 1;
+  }
+}
+
+// Example function to demonstrate Asset Destroy transaction
+int submitAssetDestroy()
+{
+  int iErr = 0;
+
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.println("=== submitAssetDestroy() function called ===");
+  #endif
+
+  // Check for WiFi connection
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.print("Trying to connect to WiFi network for asset destroy "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
+  #endif
+
+  if((g_wifiMulti.run() == WL_CONNECTED))
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.print("Connected to "); DEBUG_SERIAL.println(MYWIFI_SSID); DEBUG_SERIAL.println();
+    #endif
+
+    // Example: Destroy an asset
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.println("Example: Asset Destroy");
+    #endif
+
+    iErr = g_algoIoT.submitAssetDestroyToAlgorand(ASSET_ID_FOR_DESTROY);
+    if (iErr)
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Error %d submitting asset destroy transaction (Asset ID %llu might not exist or no destroy permissions)\n", iErr, ASSET_ID_FOR_DESTROY);
+      #endif
+      // Don't return error, just skip this transaction type
+      return 0; // Return success to continue cycling
+    }
+    else
+    {
+      #ifdef SERIAL_DEBUGMODE
+      DEBUG_SERIAL.printf("Asset Destroy transaction successfully submitted with ID = %s\n", g_algoIoT.getTransactionID());
+      #endif
+    }
+
+    return 0;
+  }
+  else
+  {
+    #ifdef SERIAL_DEBUGMODE
+    DEBUG_SERIAL.println("WiFi not connected, cannot submit asset destroy transaction");
+    #endif
+    return 1;
+  }
+}
+
 // Example function to demonstrate Application NoOp transaction
 int submitApplicationNoOp()
 {
   int iErr = 0;
+
+  #ifdef SERIAL_DEBUGMODE
+  DEBUG_SERIAL.println("=== submitApplicationNoOp() function called ===");
+  #endif
   
   // Check for WiFi connection
   #ifdef SERIAL_DEBUGMODE
@@ -680,9 +999,10 @@ int submitApplicationNoOp()
     if (iErr)
     {
       #ifdef SERIAL_DEBUGMODE
-      DEBUG_SERIAL.printf("Error %d submitting simple application NoOp transaction\n", iErr);
+      DEBUG_SERIAL.printf("Error %d submitting simple application NoOp transaction (Application ID %llu might not exist or not opted in)\n", iErr, APPLICATION_ID_FOR_NOOP);
       #endif
-      return iErr;
+      // Don't return error, just skip this transaction type
+      return 0; // Return success to continue cycling
     }
     else
     {

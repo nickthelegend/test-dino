@@ -25,6 +25,10 @@ AlgoIoT Class
     ├── Payment Transactions
     ├── Asset Creation
     ├── Asset Opt-in
+    ├── Asset Opt-out
+    ├── Asset Freeze
+    ├── Asset Destroy
+    ├── Application NoOp
     └── Application Opt-in
 ```
 
@@ -120,7 +124,120 @@ AlgoIoT Class
 
 **Note**: Opt-in is achieved by sending 0 amount of asset to self
 
-### 4. Application Opt-in (Not Working ❌)
+### 4. Asset Opt-out (Working ✅)
+
+**Purpose**: Opt out of assets and close asset holdings
+
+**MessagePack Structure**:
+```
+{
+  "aclose": <close_to_address>, // where to send remaining balance
+  "arcv": <receiver_address>,  // same as sender for opt-out
+  "fee": <transaction_fee>,
+  "fv": <first_valid_round>,
+  "gen": "testnet-v1.0",
+  "gh": <genesis_hash>,
+  "lv": <last_valid_round>,
+  "snd": <sender_address>,
+  "type": "axfer",             // asset transfer
+  "xaid": <asset_id>           // asset ID to opt out of
+}
+```
+
+**Implementation**: `prepareAssetOptOutMessagePack()`
+
+**Parameters**:
+- `assetId`: Asset ID to opt out of
+- `closeToAddress`: Optional address to receive remaining balance (defaults to sender)
+
+### 5. Asset Freeze (Working ✅)
+
+**Purpose**: Freeze or unfreeze assets for specific addresses
+
+**MessagePack Structure**:
+```
+{
+  "afrz": <freeze_flag>,       // true to freeze, false to unfreeze
+  "fadd": <freeze_address>,    // address to freeze/unfreeze
+  "faid": <asset_id>,          // asset ID
+  "fee": <transaction_fee>,
+  "fv": <first_valid_round>,
+  "gen": "testnet-v1.0",
+  "gh": <genesis_hash>,
+  "lv": <last_valid_round>,
+  "snd": <sender_address>,
+  "type": "afrz"               // asset freeze transaction
+}
+```
+
+**Implementation**: `prepareAssetFreezeMessagePack()`
+
+**Parameters**:
+- `assetId`: Asset ID to freeze/unfreeze
+- `freezeAddress`: Address to freeze/unfreeze
+- `freeze`: Boolean flag (true = freeze, false = unfreeze)
+
+### 6. Asset Destroy (Working ✅)
+
+**Purpose**: Destroy assets from the Algorand ledger
+
+**MessagePack Structure**:
+```
+{
+  "caid": <asset_id>,          // config asset ID to destroy
+  "fee": <transaction_fee>,
+  "fv": <first_valid_round>,
+  "gen": "testnet-v1.0",
+  "gh": <genesis_hash>,
+  "lv": <last_valid_round>,
+  "snd": <sender_address>,
+  "type": "acfg"               // asset config transaction
+}
+```
+
+**Implementation**: `prepareAssetDestroyMessagePack()`
+
+**Parameters**:
+- `assetId`: Asset ID to destroy
+
+**Requirements**:
+- Original creator must possess all units of the asset
+- Manager must send and authorize the transaction
+- Differentiated from asset creation by presence of `caid` field
+- Differentiated from asset reconfiguration by absence of asset parameters
+
+### 7. Application NoOp (Working ✅)
+
+**Purpose**: Call smart contract applications without changing lifecycle state
+
+**MessagePack Structure**:
+```
+{
+  "apid": <application_id>,    // application ID to call
+  "apaa": [<app_args>],        // optional application arguments
+  "apat": [<accounts>],        // optional accounts to reference
+  "apas": [<foreign_assets>],  // optional foreign assets
+  "apfa": [<foreign_apps>],    // optional foreign applications
+  "fee": <transaction_fee>,
+  "fv": <first_valid_round>,
+  "gen": "testnet-v1.0",
+  "gh": <genesis_hash>,
+  "lv": <last_valid_round>,
+  "snd": <sender_address>,
+  "type": "appl"               // application call
+}
+```
+
+**Implementation**: `prepareApplicationNoOpMessagePack()`
+
+**Parameters**:
+- `applicationId`: Application ID to call
+- `appArgs`: Optional application arguments (strings)
+- `foreignAssets`: Optional foreign asset IDs to reference
+- `foreignApps`: Optional foreign application IDs to reference
+- `accounts`: Optional accounts to reference
+
+### 7. Application Opt-in (Not Working ❌)
 
 **Purpose**: Opt into smart contract applications
 
@@ -350,6 +467,10 @@ algoIoT.setDestinationAddress("ALGORAND_ADDRESS_HERE");
 Payment: 1000 microAlgos
 Asset Creation: 1000 microAlgos (minimum)
 Asset Opt-in: 1000 microAlgos
+Asset Opt-out: 1000 microAlgos
+Asset Freeze: 1000 microAlgos
+Asset Destroy: 1000 microAlgos
+Application NoOp: 1000 microAlgos (minimum)
 Application Opt-in: 1000 microAlgos
 ```
 

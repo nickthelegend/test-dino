@@ -1961,13 +1961,7 @@ int AlgoIoT::submitTransaction(msgPack msgPackTx)
   return httpResponseCode;
 }
 
-// Also add a standalone function to manually debug the MessagePack at any point
-void debugMessagePackAtPos(msgPack msgPackTx, uint32_t position) {
-  #ifdef LIB_DEBUGMODE
-  AlgoIoT dummyInstance("debug", "shadow market lounge gauge battle small crash funny supreme regular obtain require control oil lend reward galaxy tuition elder owner flavor rural expose absent sniff");
-  dummyInstance.debugMessagePackAtPosition(msgPackTx, position);
-  #endif
-}
+
 
 // Add this debugging function to examine the MessagePack content at a specific position
 void AlgoIoT::debugMessagePackAtPosition(msgPack msgPackTx, uint32_t errorPosition) {
@@ -2958,6 +2952,8 @@ int AlgoIoT::prepareAssetCreationMessagePack(
   return 0;
 }
 
+
+
 // Submit application NoOp transaction to Algorand network
 // Return: error code (0 = OK)
 int AlgoIoT::submitApplicationNoOpToAlgorand(
@@ -3226,27 +3222,17 @@ int AlgoIoT::prepareApplicationNoOpMessagePack(
       return 5;
     }
     
-    // apaa value is an array of byte arrays
-    iErr = msgpackAddShortArray(msgPackTx, appArgsCount);
-    if (iErr)
-    {
-      #ifdef LIB_DEBUGMODE
-      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apaa array\n\n", iErr);
-      #endif
-      return 5;
-    }
-    
-    for (uint8_t i = 0; i < appArgsCount; i++) {
-      if (appArgs[i] != NULL) {
-        // Convert string to byte array
-        iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)appArgs[i], (const uint8_t)strlen(appArgs[i]));
-        if (iErr)
-        {
-          #ifdef LIB_DEBUGMODE
-          DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apaa[%d]\n\n", iErr, i);
-          #endif
-          return 5;
-        }
+    // For now, we'll add just the first argument as a simple byte array
+    // TODO: Implement proper array support in MessagePack library
+    if (appArgs[0] != NULL) {
+      // Convert string to byte array
+      iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)appArgs[0], (const uint8_t)strlen(appArgs[0]));
+      if (iErr)
+      {
+        #ifdef LIB_DEBUGMODE
+        DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apaa[0]\n\n", iErr);
+        #endif
+        return 5;
       }
     }
   }
@@ -3262,38 +3248,28 @@ int AlgoIoT::prepareApplicationNoOpMessagePack(
       return 5;
     }
     
-    // apat value is an array of addresses
-    iErr = msgpackAddShortArray(msgPackTx, accountsCount);
-    if (iErr)
-    {
-      #ifdef LIB_DEBUGMODE
-      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apat array\n\n", iErr);
-      #endif
-      return 5;
-    }
-    
-    for (uint8_t i = 0; i < accountsCount; i++) {
-      if (accounts[i] != NULL) {
-        // Decode and add the account address
-        uint8_t* accountBytes = NULL;
-        iErr = decodeAlgorandAddress(accounts[i], accountBytes);
-        if (iErr)
-        {
-          #ifdef LIB_DEBUGMODE
-          DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d decoding account[%d]\n\n", iErr, i);
-          #endif
-          return 5;
-        }
-        
-        iErr = msgpackAddShortByteArray(msgPackTx, accountBytes, (const uint8_t)ALGORAND_ADDRESS_BYTES);
-        free(accountBytes); // Free the allocated memory
-        if (iErr)
-        {
-          #ifdef LIB_DEBUGMODE
-          DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apat[%d]\n\n", iErr, i);
-          #endif
-          return 5;
-        }
+    // For now, we'll add just the first account as a simple byte array
+    // TODO: Implement proper array support in MessagePack library
+    if (accounts[0] != NULL) {
+      // Decode and add the account address
+      uint8_t* accountBytes = NULL;
+      iErr = decodeAlgorandAddress(accounts[0], accountBytes);
+      if (iErr)
+      {
+        #ifdef LIB_DEBUGMODE
+        DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d decoding account[0]\n\n", iErr);
+        #endif
+        return 5;
+      }
+      
+      iErr = msgpackAddShortByteArray(msgPackTx, accountBytes, (const uint8_t)ALGORAND_ADDRESS_BYTES);
+      free(accountBytes); // Free the allocated memory
+      if (iErr)
+      {
+        #ifdef LIB_DEBUGMODE
+        DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apat[0]\n\n", iErr);
+        #endif
+        return 5;
       }
     }
   }
@@ -3309,30 +3285,19 @@ int AlgoIoT::prepareApplicationNoOpMessagePack(
       return 5;
     }
     
-    // apas value is an array of asset IDs
-    iErr = msgpackAddShortArray(msgPackTx, foreignAssetsCount);
+    // For now, we'll add just the first foreign asset as a simple integer
+    // TODO: Implement proper array support in MessagePack library
+    if (foreignAssets[0] <= 0xFFFFFFFF) {
+      iErr = msgpackAddUInt32(msgPackTx, (uint32_t)foreignAssets[0]);
+    } else {
+      iErr = msgpackAddUInt64(msgPackTx, foreignAssets[0]);
+    }
     if (iErr)
     {
       #ifdef LIB_DEBUGMODE
-      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apas array\n\n", iErr);
+      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apas[0]\n\n", iErr);
       #endif
       return 5;
-    }
-    
-    for (uint8_t i = 0; i < foreignAssetsCount; i++) {
-      // Add asset ID (use appropriate encoding based on size)
-      if (foreignAssets[i] <= 0xFFFFFFFF) {
-        iErr = msgpackAddUInt32(msgPackTx, (uint32_t)foreignAssets[i]);
-      } else {
-        iErr = msgpackAddUInt64(msgPackTx, foreignAssets[i]);
-      }
-      if (iErr)
-      {
-        #ifdef LIB_DEBUGMODE
-        DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apas[%d]\n\n", iErr, i);
-        #endif
-        return 5;
-      }
     }
   }
 
@@ -3347,30 +3312,19 @@ int AlgoIoT::prepareApplicationNoOpMessagePack(
       return 5;
     }
     
-    // apfa value is an array of application IDs
-    iErr = msgpackAddShortArray(msgPackTx, foreignAppsCount);
+    // For now, we'll add just the first foreign app as a simple integer
+    // TODO: Implement proper array support in MessagePack library
+    if (foreignApps[0] <= 0xFFFFFFFF) {
+      iErr = msgpackAddUInt32(msgPackTx, (uint32_t)foreignApps[0]);
+    } else {
+      iErr = msgpackAddUInt64(msgPackTx, foreignApps[0]);
+    }
     if (iErr)
     {
       #ifdef LIB_DEBUGMODE
-      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apfa array\n\n", iErr);
+      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apfa[0]\n\n", iErr);
       #endif
       return 5;
-    }
-    
-    for (uint8_t i = 0; i < foreignAppsCount; i++) {
-      // Add application ID (use appropriate encoding based on size)
-      if (foreignApps[i] <= 0xFFFFFFFF) {
-        iErr = msgpackAddUInt32(msgPackTx, (uint32_t)foreignApps[i]);
-      } else {
-        iErr = msgpackAddUInt64(msgPackTx, foreignApps[i]);
-      }
-      if (iErr)
-      {
-        #ifdef LIB_DEBUGMODE
-        DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apfa[%d]\n\n", iErr, i);
-        #endif
-        return 5;
-      }
     }
   }
 
@@ -3509,6 +3463,1201 @@ int AlgoIoT::prepareApplicationNoOpMessagePack(
   
   #ifdef LIB_DEBUGMODE
   DEBUG_SERIAL.println("\nApplication NoOp MessagePack preparation complete");
+  #endif
+
+  // End of messagepack
+  return 0;
+}
+
+// Submit asset opt-out transaction to Algorand network
+// Return: error code (0 = OK)
+int AlgoIoT::submitAssetOptOutToAlgorand(uint64_t assetId, const char* closeToAddress)
+{
+  uint32_t fv = 0;
+  uint16_t fee = 0;
+  int iErr = 0;
+  uint8_t signature[ALGORAND_SIG_BYTES];
+  uint8_t transactionMessagePackBuffer[ALGORAND_MAX_TX_MSGPACK_SIZE];
+  char transactionID[ALGORAND_TRANSACTIONID_SIZE + 1] = "";
+  msgPack msgPackTx = NULL;
+
+  // Use sender address as close-to address if not provided
+  if (closeToAddress == NULL) {
+    closeToAddress = (const char*)m_senderAddressBytes;
+  }
+
+  // Get current Algorand parameters
+  int httpResCode = getAlgorandTxParams(&fv, &fee);
+  if (httpResCode != 200)
+  {
+    return ALGOIOT_NETWORK_ERROR;
+  }
+
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nPreparing asset opt-out transaction for asset ID: %llu\n", assetId);
+  DEBUG_SERIAL.printf("First valid round: %u, Fee: %u\n", fv, fee);
+  DEBUG_SERIAL.printf("Sender address (first 8 bytes): %02X %02X %02X %02X %02X %02X %02X %02X\n", 
+                     m_senderAddressBytes[0], m_senderAddressBytes[1], m_senderAddressBytes[2], m_senderAddressBytes[3],
+                     m_senderAddressBytes[4], m_senderAddressBytes[5], m_senderAddressBytes[6], m_senderAddressBytes[7]);
+  #endif
+
+  // Prepare transaction structure as MessagePack
+  msgPackTx = msgpackInit(&(transactionMessagePackBuffer[0]), ALGORAND_MAX_TX_MSGPACK_SIZE);
+  if (msgPackTx == NULL)  
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.println("\n Error initializing transaction MessagePack\n");
+    #endif
+    return ALGOIOT_MESSAGEPACK_ERROR;
+  }  
+  
+  iErr = prepareAssetOptOutMessagePack(msgPackTx, fv, fee, assetId, closeToAddress);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d preparing asset opt-out MessagePack\n", iErr);
+    #endif
+    return ALGOIOT_MESSAGEPACK_ERROR;
+  }
+
+  // Debug print the MessagePack content
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nUnsigned MessagePack content:");
+  debugPrintMessagePack(msgPackTx);
+  #endif
+
+  // Asset opt-out transaction correctly assembled. Now sign it
+  iErr = signMessagePackAddingPrefix(msgPackTx, &(signature[0]));
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d signing MessagePack\n", iErr);
+    #endif
+    return ALGOIOT_SIGNATURE_ERROR;
+  }
+
+  // Debug print the signature
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nSignature (64 bytes):");
+  for (int i = 0; i < ALGORAND_SIG_BYTES; i++) {
+    DEBUG_SERIAL.printf("%02X ", signature[i]);
+    if ((i + 1) % 16 == 0) DEBUG_SERIAL.println();
+  }
+  DEBUG_SERIAL.println();
+  #endif
+
+  // Signed OK: now compose payload
+  iErr = createSignedBinaryTransaction(msgPackTx, signature);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d creating signed binary transaction\n", iErr);
+    #endif
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  }
+
+  // Debug print the final signed MessagePack
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nSigned MessagePack content:");
+  debugPrintMessagePack(msgPackTx);
+  
+  // Payload ready. Now we can submit it via algod REST API
+  DEBUG_SERIAL.println("\nReady to submit asset opt-out transaction to Algorand network");
+  #endif
+  
+  // Print transaction data in readable format
+  #ifdef LIB_DEBUGMODE
+  printTransactionData(msgPackTx);
+  #endif
+  
+  iErr = submitTransaction(msgPackTx); // Returns HTTP code
+  if (iErr != 200)  // 200 = HTTP OK
+  { // Something went wrong
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d submitting asset opt-out transaction\n", iErr);
+    #endif
+    return ALGOIOT_TRANSACTION_ERROR;
+  }
+  
+  // OK: our transaction for asset opt-out was successfully submitted to the Algorand blockchain
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.print("\t Asset opt-out transaction successfully submitted with ID=");
+  DEBUG_SERIAL.println(getTransactionID());
+  #endif
+  
+  return ALGOIOT_NO_ERROR;
+}
+
+// Prepares an asset opt-out transaction MessagePack
+// Returns error code (0 = OK)
+int AlgoIoT::prepareAssetOptOutMessagePack(msgPack msgPackTx,
+                                  const uint32_t lastRound, 
+                                  const uint16_t fee,
+                                  const uint64_t assetId,
+                                  const char* closeToAddress)
+{ 
+  int iErr = 0;
+  char gen[ALGORAND_NETWORK_ID_CHARS + 1] = "";
+  uint32_t lv = lastRound + ALGORAND_MAX_WAIT_ROUNDS;
+  uint8_t nFields = ALGORAND_ASSET_OPTOUT_MIN_FIELDS;
+
+  if (msgPackTx == NULL)
+    return ALGOIOT_NULL_POINTER_ERROR;
+  if (msgPackTx->msgBuffer == NULL)
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  if ((lastRound == 0) || (fee == 0))
+  {
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  }
+  
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nPreparing asset opt-out with asset ID: %llu\n", assetId);
+  #endif
+  
+  if (m_networkType == ALGORAND_TESTNET)
+  { // TestNet
+    strncpy(gen, ALGORAND_TESTNET_ID, ALGORAND_NETWORK_ID_CHARS);
+    // Decode Algorand network hash
+    iErr = decodeAlgorandNetHash(ALGORAND_TESTNET_HASH, m_netHash);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d decoding Algorand network hash\n\n", iErr);
+      #endif
+      return ALGOIOT_INTERNAL_GENERIC_ERROR;
+    }
+  }
+  else
+  { // MainNet
+    strncpy(gen, ALGORAND_MAINNET_ID, ALGORAND_NETWORK_ID_CHARS);
+    iErr = decodeAlgorandNetHash(ALGORAND_MAINNET_HASH, m_netHash);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d decoding Algorand network hash\n\n", iErr);
+      #endif
+      return ALGOIOT_INTERNAL_GENERIC_ERROR;
+    }
+  }
+  gen[ALGORAND_NETWORK_ID_CHARS] = '\0';
+
+  // We leave a blank space header so we can add:
+  // - "TX" prefix before signing
+  // - m_signature field and "txn" node field after signing
+  iErr = msgPackModifyCurrentPosition(msgPackTx, BLANK_MSGPACK_HEADER);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d from msgPackModifyCurrentPosition()\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // Add root map
+  iErr = msgpackAddShortMap(msgPackTx, nFields); 
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding root map with %d fields\n\n", iErr, nFields);
+    #endif
+    return 5;
+  }
+
+  // Fields must follow alphabetical order
+
+  // "aclose" label (Asset close-to address)
+  iErr = msgpackAddShortString(msgPackTx, "aclose");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding aclose label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // aclose value (binary buffer)
+  uint8_t* closeToBytes = NULL;
+  if (closeToAddress == (const char*)m_senderAddressBytes) {
+    // Use sender address directly
+    closeToBytes = m_senderAddressBytes;
+  } else {
+    // Decode the provided address
+    iErr = decodeAlgorandAddress(closeToAddress, closeToBytes);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d decoding close-to address\n\n", iErr);
+      #endif
+      return 5;
+    }
+  }
+  iErr = msgpackAddShortByteArray(msgPackTx, closeToBytes, (const uint8_t)ALGORAND_ADDRESS_BYTES);
+  if (closeToAddress != (const char*)m_senderAddressBytes) {
+    free(closeToBytes); // Free the allocated memory
+  }
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding aclose value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "arcv" label (Asset receiver - same as sender for opt-out)
+  iErr = msgpackAddShortString(msgPackTx, "arcv");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding arcv label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // arcv value (binary buffer) - same as sender for opt-out
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);  
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding arcv value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "fee" label
+  iErr = msgpackAddShortString(msgPackTx, "fee");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding fee label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // fee value
+  iErr = msgpackAddUInt16(msgPackTx, fee);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding fee value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "fv" label
+  iErr = msgpackAddShortString(msgPackTx, "fv");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding fv label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // fv value
+  iErr = msgpackAddUInt32(msgPackTx, lastRound);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding fv value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "gen" label
+  iErr = msgpackAddShortString(msgPackTx, "gen");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding gen label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // gen string
+  iErr = msgpackAddShortString(msgPackTx, gen);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding gen string\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "gh" label
+  iErr = msgpackAddShortString(msgPackTx, "gh");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding gh label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // gh value (binary buffer)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_netHash[0]), (const uint8_t)ALGORAND_NET_HASH_BYTES);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding gh value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "lv" label
+  iErr = msgpackAddShortString(msgPackTx, "lv");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding lv label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // lv value
+  iErr = msgpackAddUInt32(msgPackTx, lv);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding lv value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "snd" label
+  iErr = msgpackAddShortString(msgPackTx, "snd");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding snd label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // snd value (binary buffer)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);  
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding snd value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "type" label
+  iErr = msgpackAddShortString(msgPackTx, "type");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding type label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // type string
+  iErr = msgpackAddShortString(msgPackTx, "axfer");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding type string\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "xaid" label
+  iErr = msgpackAddShortString(msgPackTx, "xaid");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding xaid label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // xaid value - Use UInt32 for asset IDs that fit in 32 bits to match Algo SDK encoding
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nAdding asset ID: %llu\n", assetId);
+  #endif
+  
+  // Check if the asset ID fits in a uint32
+  if (assetId <= 0xFFFFFFFF) {
+    iErr = msgpackAddUInt32(msgPackTx, (uint32_t)assetId);
+  } else {
+    iErr = msgpackAddUInt64(msgPackTx, assetId);
+  }
+  
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetOptOutMessagePack(): ERROR %d adding xaid value\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nAsset opt-out MessagePack preparation complete");
+  #endif
+
+  // End of messagepack
+  return 0;
+}
+
+// Submit asset freeze transaction to Algorand network
+// Return: error code (0 = OK)
+int AlgoIoT::submitAssetFreezeToAlgorand(uint64_t assetId, const char* freezeAddress, bool freeze)
+{
+  uint32_t fv = 0;
+  uint16_t fee = 0;
+  int iErr = 0;
+  uint8_t signature[ALGORAND_SIG_BYTES];
+  uint8_t transactionMessagePackBuffer[ALGORAND_MAX_TX_MSGPACK_SIZE];
+  char transactionID[ALGORAND_TRANSACTIONID_SIZE + 1] = "";
+  msgPack msgPackTx = NULL;
+
+  // Get current Algorand parameters
+  int httpResCode = getAlgorandTxParams(&fv, &fee);
+  if (httpResCode != 200)
+  {
+    return ALGOIOT_NETWORK_ERROR;
+  }
+
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nPreparing asset freeze transaction for asset ID: %llu\n", assetId);
+  DEBUG_SERIAL.printf("Freeze: %s, First valid round: %u, Fee: %u\n", freeze ? "true" : "false", fv, fee);
+  DEBUG_SERIAL.printf("Sender address (first 8 bytes): %02X %02X %02X %02X %02X %02X %02X %02X\n", 
+                     m_senderAddressBytes[0], m_senderAddressBytes[1], m_senderAddressBytes[2], m_senderAddressBytes[3],
+                     m_senderAddressBytes[4], m_senderAddressBytes[5], m_senderAddressBytes[6], m_senderAddressBytes[7]);
+  #endif
+
+  // Prepare transaction structure as MessagePack
+  msgPackTx = msgpackInit(&(transactionMessagePackBuffer[0]), ALGORAND_MAX_TX_MSGPACK_SIZE);
+  if (msgPackTx == NULL)  
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.println("\n Error initializing transaction MessagePack\n");
+    #endif
+    return ALGOIOT_MESSAGEPACK_ERROR;
+  }  
+  
+  iErr = prepareAssetFreezeMessagePack(msgPackTx, fv, fee, assetId, freezeAddress, freeze);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d preparing asset freeze MessagePack\n", iErr);
+    #endif
+    return ALGOIOT_MESSAGEPACK_ERROR;
+  }
+
+  // Debug print the MessagePack content
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nUnsigned MessagePack content:");
+  debugPrintMessagePack(msgPackTx);
+  #endif
+
+  // Asset freeze transaction correctly assembled. Now sign it
+  iErr = signMessagePackAddingPrefix(msgPackTx, &(signature[0]));
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d signing MessagePack\n", iErr);
+    #endif
+    return ALGOIOT_SIGNATURE_ERROR;
+  }
+
+  // Debug print the signature
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nSignature (64 bytes):");
+  for (int i = 0; i < ALGORAND_SIG_BYTES; i++) {
+    DEBUG_SERIAL.printf("%02X ", signature[i]);
+    if ((i + 1) % 16 == 0) DEBUG_SERIAL.println();
+  }
+  DEBUG_SERIAL.println();
+  #endif
+
+  // Signed OK: now compose payload
+  iErr = createSignedBinaryTransaction(msgPackTx, signature);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d creating signed binary transaction\n", iErr);
+    #endif
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  }
+
+  // Debug print the final signed MessagePack
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nSigned MessagePack content:");
+  debugPrintMessagePack(msgPackTx);
+  
+  // Payload ready. Now we can submit it via algod REST API
+  DEBUG_SERIAL.println("\nReady to submit asset freeze transaction to Algorand network");
+  #endif
+  
+  // Print transaction data in readable format
+  #ifdef LIB_DEBUGMODE
+  printTransactionData(msgPackTx);
+  #endif
+  
+  iErr = submitTransaction(msgPackTx); // Returns HTTP code
+  if (iErr != 200)  // 200 = HTTP OK
+  { // Something went wrong
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d submitting asset freeze transaction\n", iErr);
+    #endif
+    return ALGOIOT_TRANSACTION_ERROR;
+  }
+  
+  // OK: our transaction for asset freeze was successfully submitted to the Algorand blockchain
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.print("\t Asset freeze transaction successfully submitted with ID=");
+  DEBUG_SERIAL.println(getTransactionID());
+  #endif
+  
+  return ALGOIOT_NO_ERROR;
+}
+
+// Prepares an asset freeze transaction MessagePack
+// Returns error code (0 = OK)
+int AlgoIoT::prepareAssetFreezeMessagePack(msgPack msgPackTx,
+                                  const uint32_t lastRound, 
+                                  const uint16_t fee,
+                                  const uint64_t assetId,
+                                  const char* freezeAddress,
+                                  bool freeze)
+{ 
+  int iErr = 0;
+  char gen[ALGORAND_NETWORK_ID_CHARS + 1] = "";
+  uint32_t lv = lastRound + ALGORAND_MAX_WAIT_ROUNDS;
+  uint8_t nFields = ALGORAND_ASSET_FREEZE_MIN_FIELDS;
+
+  if (msgPackTx == NULL)
+    return ALGOIOT_NULL_POINTER_ERROR;
+  if (msgPackTx->msgBuffer == NULL)
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  if ((lastRound == 0) || (fee == 0))
+  {
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  }
+  
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nPreparing asset freeze with asset ID: %llu\n", assetId);
+  #endif
+  
+  if (m_networkType == ALGORAND_TESTNET)
+  { // TestNet
+    strncpy(gen, ALGORAND_TESTNET_ID, ALGORAND_NETWORK_ID_CHARS);
+    // Decode Algorand network hash
+    iErr = decodeAlgorandNetHash(ALGORAND_TESTNET_HASH, m_netHash);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d decoding Algorand network hash\n\n", iErr);
+      #endif
+      return ALGOIOT_INTERNAL_GENERIC_ERROR;
+    }
+  }
+  else
+  { // MainNet
+    strncpy(gen, ALGORAND_MAINNET_ID, ALGORAND_NETWORK_ID_CHARS);
+    iErr = decodeAlgorandNetHash(ALGORAND_MAINNET_HASH, m_netHash);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d decoding Algorand network hash\n\n", iErr);
+      #endif
+      return ALGOIOT_INTERNAL_GENERIC_ERROR;
+    }
+  }
+  gen[ALGORAND_NETWORK_ID_CHARS] = '\0';
+
+  // We leave a blank space header so we can add:
+  // - "TX" prefix before signing
+  // - m_signature field and "txn" node field after signing
+  iErr = msgPackModifyCurrentPosition(msgPackTx, BLANK_MSGPACK_HEADER);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d from msgPackModifyCurrentPosition()\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // Add root map
+  iErr = msgpackAddShortMap(msgPackTx, nFields); 
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding root map with %d fields\n\n", iErr, nFields);
+    #endif
+    return 5;
+  }
+
+  // Fields must follow alphabetical order
+
+  // "afrz" label (Asset freeze flag)
+  iErr = msgpackAddShortString(msgPackTx, "afrz");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding afrz label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // afrz value (boolean)
+  iErr = msgpackAddUInt7(msgPackTx, freeze ? 1 : 0);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding afrz value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "fadd" label (Freeze address)
+  iErr = msgpackAddShortString(msgPackTx, "fadd");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding fadd label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // fadd value (binary buffer)
+  uint8_t* freezeAddressBytes = NULL;
+  iErr = decodeAlgorandAddress(freezeAddress, freezeAddressBytes);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d decoding freeze address\n\n", iErr);
+    #endif
+    return 5;
+  }
+  iErr = msgpackAddShortByteArray(msgPackTx, freezeAddressBytes, (const uint8_t)ALGORAND_ADDRESS_BYTES);
+  free(freezeAddressBytes); // Free the allocated memory
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding fadd value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "faid" label (Freeze asset ID)
+  iErr = msgpackAddShortString(msgPackTx, "faid");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding faid label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // faid value - Use UInt32 for asset IDs that fit in 32 bits to match Algo SDK encoding
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nAdding asset ID: %llu\n", assetId);
+  #endif
+  
+  // Check if the asset ID fits in a uint32
+  if (assetId <= 0xFFFFFFFF) {
+    iErr = msgpackAddUInt32(msgPackTx, (uint32_t)assetId);
+  } else {
+    iErr = msgpackAddUInt64(msgPackTx, assetId);
+  }
+  
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding faid value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "fee" label
+  iErr = msgpackAddShortString(msgPackTx, "fee");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding fee label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // fee value
+  iErr = msgpackAddUInt16(msgPackTx, fee);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding fee value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "fv" label
+  iErr = msgpackAddShortString(msgPackTx, "fv");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding fv label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // fv value
+  iErr = msgpackAddUInt32(msgPackTx, lastRound);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding fv value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "gen" label
+  iErr = msgpackAddShortString(msgPackTx, "gen");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding gen label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // gen string
+  iErr = msgpackAddShortString(msgPackTx, gen);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding gen string\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "gh" label
+  iErr = msgpackAddShortString(msgPackTx, "gh");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding gh label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // gh value (binary buffer)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_netHash[0]), (const uint8_t)ALGORAND_NET_HASH_BYTES);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding gh value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "lv" label
+  iErr = msgpackAddShortString(msgPackTx, "lv");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding lv label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // lv value
+  iErr = msgpackAddUInt32(msgPackTx, lv);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding lv value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "snd" label
+  iErr = msgpackAddShortString(msgPackTx, "snd");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding snd label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // snd value (binary buffer)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);  
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding snd value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "type" label
+  iErr = msgpackAddShortString(msgPackTx, "type");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding type label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // type string
+  iErr = msgpackAddShortString(msgPackTx, "afrz");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetFreezeMessagePack(): ERROR %d adding type string\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nAsset freeze MessagePack preparation complete");
+  #endif
+
+  // End of messagepack
+  return 0;
+}
+
+// Submit asset destroy transaction to Algorand network
+// Return: error code (0 = OK)
+int AlgoIoT::submitAssetDestroyToAlgorand(uint64_t assetId)
+{
+  uint32_t fv = 0;
+  uint16_t fee = 0;
+  int iErr = 0;
+  uint8_t signature[ALGORAND_SIG_BYTES];
+  uint8_t transactionMessagePackBuffer[ALGORAND_MAX_TX_MSGPACK_SIZE];
+  char transactionID[ALGORAND_TRANSACTIONID_SIZE + 1] = "";
+  msgPack msgPackTx = NULL;
+
+  // Get current Algorand parameters
+  int httpResCode = getAlgorandTxParams(&fv, &fee);
+  if (httpResCode != 200)
+  {
+    return ALGOIOT_NETWORK_ERROR;
+  }
+
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nPreparing asset destroy transaction for asset ID: %llu\n", assetId);
+  DEBUG_SERIAL.printf("First valid round: %u, Fee: %u\n", fv, fee);
+  DEBUG_SERIAL.printf("Sender address (first 8 bytes): %02X %02X %02X %02X %02X %02X %02X %02X\n", 
+                     m_senderAddressBytes[0], m_senderAddressBytes[1], m_senderAddressBytes[2], m_senderAddressBytes[3],
+                     m_senderAddressBytes[4], m_senderAddressBytes[5], m_senderAddressBytes[6], m_senderAddressBytes[7]);
+  #endif
+
+  // Prepare transaction structure as MessagePack
+  msgPackTx = msgpackInit(&(transactionMessagePackBuffer[0]), ALGORAND_MAX_TX_MSGPACK_SIZE);
+  if (msgPackTx == NULL)  
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.println("\n Error initializing transaction MessagePack\n");
+    #endif
+    return ALGOIOT_MESSAGEPACK_ERROR;
+  }  
+  
+  iErr = prepareAssetDestroyMessagePack(msgPackTx, fv, fee, assetId);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d preparing asset destroy MessagePack\n", iErr);
+    #endif
+    return ALGOIOT_MESSAGEPACK_ERROR;
+  }
+
+  // Debug print the MessagePack content
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nUnsigned MessagePack content:");
+  debugPrintMessagePack(msgPackTx);
+  #endif
+
+  // Asset destroy transaction correctly assembled. Now sign it
+  iErr = signMessagePackAddingPrefix(msgPackTx, &(signature[0]));
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d signing MessagePack\n", iErr);
+    #endif
+    return ALGOIOT_SIGNATURE_ERROR;
+  }
+
+  // Debug print the signature
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nSignature (64 bytes):");
+  for (int i = 0; i < ALGORAND_SIG_BYTES; i++) {
+    DEBUG_SERIAL.printf("%02X ", signature[i]);
+    if ((i + 1) % 16 == 0) DEBUG_SERIAL.println();
+  }
+  DEBUG_SERIAL.println();
+  #endif
+
+  // Signed OK: now compose payload
+  iErr = createSignedBinaryTransaction(msgPackTx, signature);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d creating signed binary transaction\n", iErr);
+    #endif
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  }
+
+  // Debug print the final signed MessagePack
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nSigned MessagePack content:");
+  debugPrintMessagePack(msgPackTx);
+  
+  // Payload ready. Now we can submit it via algod REST API
+  DEBUG_SERIAL.println("\nReady to submit asset destroy transaction to Algorand network");
+  #endif
+  
+  // Print transaction data in readable format
+  #ifdef LIB_DEBUGMODE
+  printTransactionData(msgPackTx);
+  #endif
+  
+  iErr = submitTransaction(msgPackTx); // Returns HTTP code
+  if (iErr != 200)  // 200 = HTTP OK
+  { // Something went wrong
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d submitting asset destroy transaction\n", iErr);
+    #endif
+    return ALGOIOT_TRANSACTION_ERROR;
+  }
+  
+  // OK: our transaction for asset destroy was successfully submitted to the Algorand blockchain
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.print("\t Asset destroy transaction successfully submitted with ID=");
+  DEBUG_SERIAL.println(getTransactionID());
+  #endif
+  
+  return ALGOIOT_NO_ERROR;
+}
+
+// Prepares an asset destroy transaction MessagePack
+// Returns error code (0 = OK)
+int AlgoIoT::prepareAssetDestroyMessagePack(msgPack msgPackTx,
+                                  const uint32_t lastRound, 
+                                  const uint16_t fee,
+                                  const uint64_t assetId)
+{ 
+  int iErr = 0;
+  char gen[ALGORAND_NETWORK_ID_CHARS + 1] = "";
+  uint32_t lv = lastRound + ALGORAND_MAX_WAIT_ROUNDS;
+  uint8_t nFields = ALGORAND_ASSET_DESTROY_MIN_FIELDS;
+
+  if (msgPackTx == NULL)
+    return ALGOIOT_NULL_POINTER_ERROR;
+  if (msgPackTx->msgBuffer == NULL)
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  if ((lastRound == 0) || (fee == 0))
+  {
+    return ALGOIOT_INTERNAL_GENERIC_ERROR;
+  }
+  
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nPreparing asset destroy with asset ID: %llu\n", assetId);
+  #endif
+  
+  if (m_networkType == ALGORAND_TESTNET)
+  { // TestNet
+    strncpy(gen, ALGORAND_TESTNET_ID, ALGORAND_NETWORK_ID_CHARS);
+    // Decode Algorand network hash
+    iErr = decodeAlgorandNetHash(ALGORAND_TESTNET_HASH, m_netHash);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d decoding Algorand network hash\n\n", iErr);
+      #endif
+      return ALGOIOT_INTERNAL_GENERIC_ERROR;
+    }
+  }
+  else
+  { // MainNet
+    strncpy(gen, ALGORAND_MAINNET_ID, ALGORAND_NETWORK_ID_CHARS);
+    iErr = decodeAlgorandNetHash(ALGORAND_MAINNET_HASH, m_netHash);
+    if (iErr)
+    {
+      #ifdef LIB_DEBUGMODE
+      DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d decoding Algorand network hash\n\n", iErr);
+      #endif
+      return ALGOIOT_INTERNAL_GENERIC_ERROR;
+    }
+  }
+  gen[ALGORAND_NETWORK_ID_CHARS] = '\0';
+
+  // We leave a blank space header so we can add:
+  // - "TX" prefix before signing
+  // - m_signature field and "txn" node field after signing
+  iErr = msgPackModifyCurrentPosition(msgPackTx, BLANK_MSGPACK_HEADER);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d from msgPackModifyCurrentPosition()\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // Add root map
+  iErr = msgpackAddShortMap(msgPackTx, nFields); 
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding root map with %d fields\n\n", iErr, nFields);
+    #endif
+    return 5;
+  }
+
+  // Fields must follow alphabetical order
+
+  // "caid" label (Config Asset ID)
+  iErr = msgpackAddShortString(msgPackTx, "caid");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding caid label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  // caid value - Use UInt32 for asset IDs that fit in 32 bits to match Algo SDK encoding
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nAdding asset ID: %llu\n", assetId);
+  #endif
+  
+  // Check if the asset ID fits in a uint32
+  if (assetId <= 0xFFFFFFFF) {
+    iErr = msgpackAddUInt32(msgPackTx, (uint32_t)assetId);
+  } else {
+    iErr = msgpackAddUInt64(msgPackTx, assetId);
+  }
+  
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding caid value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "fee" label
+  iErr = msgpackAddShortString(msgPackTx, "fee");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding fee label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // fee value
+  iErr = msgpackAddUInt16(msgPackTx, fee);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding fee value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "fv" label
+  iErr = msgpackAddShortString(msgPackTx, "fv");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding fv label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // fv value
+  iErr = msgpackAddUInt32(msgPackTx, lastRound);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding fv value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "gen" label
+  iErr = msgpackAddShortString(msgPackTx, "gen");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding gen label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // gen string
+  iErr = msgpackAddShortString(msgPackTx, gen);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding gen string\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "gh" label
+  iErr = msgpackAddShortString(msgPackTx, "gh");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding gh label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // gh value (binary buffer)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_netHash[0]), (const uint8_t)ALGORAND_NET_HASH_BYTES);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding gh value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "lv" label
+  iErr = msgpackAddShortString(msgPackTx, "lv");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding lv label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // lv value
+  iErr = msgpackAddUInt32(msgPackTx, lv);
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding lv value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "snd" label
+  iErr = msgpackAddShortString(msgPackTx, "snd");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding snd label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // snd value (binary buffer)
+  iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)&(m_senderAddressBytes[0]), (const uint8_t)ALGORAND_ADDRESS_BYTES);  
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding snd value\n\n", iErr);
+    #endif
+    return 5;
+  }
+
+  // "type" label
+  iErr = msgpackAddShortString(msgPackTx, "type");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding type label\n\n", iErr);
+    #endif
+    return 5;
+  }
+  // type string
+  iErr = msgpackAddShortString(msgPackTx, "acfg");
+  if (iErr)
+  {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n prepareAssetDestroyMessagePack(): ERROR %d adding type string\n\n", iErr);
+    #endif
+    return 5;
+  }
+  
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nAsset destroy MessagePack preparation complete");
   #endif
 
   // End of messagepack

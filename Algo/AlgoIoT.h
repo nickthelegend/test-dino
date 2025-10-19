@@ -90,6 +90,9 @@
 #define DEFAULT_ASSET_TOTAL 1 // Default total supply for created assets
 #define ALGORAND_APPLICATION_NOOP_MIN_FIELDS 7 // Fields for application NoOp: apid, fee, fv, gen, gh, lv, snd, type (minimum fields)
 #define DEFAULT_APPLICATION_NOOP_ID 51 // Default application ID for NoOp calls
+#define ALGORAND_ASSET_OPTOUT_MIN_FIELDS 10 // Fields for asset opt-out: aclose, arcv, fee, fv, gen, gh, lv, snd, type, xaid
+#define ALGORAND_ASSET_FREEZE_MIN_FIELDS 9 // Fields for asset freeze: afrz, fadd, faid, fee, fv, gen, gh, lv, snd, type
+#define ALGORAND_ASSET_DESTROY_MIN_FIELDS 7 // Fields for asset destroy: caid, fee, fv, gen, gh, lv, snd, type
 
 
 // Error codes
@@ -190,7 +193,7 @@ class AlgoIoT
   void printTransactionData(msgPack msgPackTx);
 
   // Add this function declaration to the AlgoIoT class in the private section
-  //void debugMessagePackAtPosition(msgPack msgPackTx, uint32_t errorPosition);
+  void debugMessagePackAtPosition(msgPack msgPackTx, uint32_t errorPosition);
 
   // Prepares an application opt-in transaction MessagePack
   // Returns error code (0 = OK)
@@ -227,6 +230,33 @@ class AlgoIoT
     uint8_t foreignAppsCount = 0,
     const char** accounts = NULL,
     uint8_t accountsCount = 0);
+
+  // Prepares an asset opt-out transaction MessagePack
+  // Returns error code (0 = OK)
+  int prepareAssetOptOutMessagePack(
+    msgPack msgPackTx,
+    const uint32_t lastRound, 
+    const uint16_t fee,
+    const uint64_t assetId,
+    const char* closeToAddress);
+
+  // Prepares an asset freeze transaction MessagePack
+  // Returns error code (0 = OK)
+  int prepareAssetFreezeMessagePack(
+    msgPack msgPackTx,
+    const uint32_t lastRound, 
+    const uint16_t fee,
+    const uint64_t assetId,
+    const char* freezeAddress,
+    bool freeze);
+
+  // Prepares an asset destroy transaction MessagePack
+  // Returns error code (0 = OK)
+  int prepareAssetDestroyMessagePack(
+    msgPack msgPackTx,
+    const uint32_t lastRound, 
+    const uint16_t fee,
+    const uint64_t assetId);
 
 
   public:
@@ -297,7 +327,6 @@ class AlgoIoT
   // Return: error code (0 = OK)
   int submitApplicationOptInToAlgorand(uint64_t applicationId = DEFAULT_APPLICATION_ID);
 
-  // Add this method declaration to the public section of the AlgoIoT class
   // Submit asset creation transaction to Algorand network
   // Return: error code (0 = OK)
   int submitAssetCreationToAlgorand(
@@ -307,21 +336,30 @@ class AlgoIoT
     uint8_t decimals = 0,
     uint64_t total = DEFAULT_ASSET_TOTAL);
 
+  // Submit asset opt-out transaction to Algorand network
+  // Return: error code (0 = OK)
+  int submitAssetOptOutToAlgorand(uint64_t assetId, const char* closeToAddress = NULL);
+
+  // Submit asset freeze transaction to Algorand network
+  // Return: error code (0 = OK)
+  int submitAssetFreezeToAlgorand(uint64_t assetId, const char* freezeAddress, bool freeze);
+
+  // Submit asset destroy transaction to Algorand network
+  // Return: error code (0 = OK)
+  int submitAssetDestroyToAlgorand(uint64_t assetId);
+
   // Submit application NoOp transaction to Algorand network
   // Return: error code (0 = OK)
   int submitApplicationNoOpToAlgorand(
     uint64_t applicationId,
-    const char** appArgs = NULL,
-    uint8_t appArgsCount = 0,
-    const uint64_t* foreignAssets = NULL,
-    uint8_t foreignAssetsCount = 0,
-    const uint64_t* foreignApps = NULL,
-    uint8_t foreignAppsCount = 0,
-    const char** accounts = NULL,
-    uint8_t accountsCount = 0);
+    const char** appArgs = NULL, uint8_t appArgsCount = 0,
+    const uint64_t* foreignAssets = NULL, uint8_t foreignAssetsCount = 0,
+    const uint64_t* foreignApps = NULL, uint8_t foreignAppsCount = 0,
+    const char** accounts = NULL, uint8_t accountsCount = 0);
 
-  // Debug function to examine MessagePack at a specific position
-  void debugMessagePackAtPosition(msgPack msgPackTx, uint32_t errorPosition);
+
+
+
   
   // Add a new public method to get the sender address bytes
   // Returns a pointer to the sender address bytes (public key)

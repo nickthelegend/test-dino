@@ -8,6 +8,10 @@ AlgoIoT allows ESP32 devices to:
 - Submit payment transactions with sensor data
 - Create assets on Algorand blockchain
 - Opt-in to existing assets
+- Opt-out of assets
+- Freeze/unfreeze assets
+- Destroy assets
+- Call smart contract applications (NoOp transactions)
 - Opt-in to smart contract applications
 - Store IoT data permanently on blockchain
 
@@ -16,6 +20,10 @@ AlgoIoT allows ESP32 devices to:
 - **Payment Transactions**: Send Algos with sensor data in note field
 - **Asset Creation**: Create new Algorand Standard Assets (ASAs)
 - **Asset Opt-in**: Opt into existing assets for transfers
+- **Asset Opt-out**: Opt out of assets and close asset holdings
+- **Asset Freeze**: Freeze/unfreeze assets for specific addresses
+- **Asset Destroy**: Destroy assets from the Algorand ledger
+- **Application NoOp**: Call smart contract applications without state changes
 - **Application Opt-in**: Opt into smart contracts/applications
 - **ARC-2 Compliance**: JSON data format in transaction notes
 - **Testnet/Mainnet Support**: Switch between networks
