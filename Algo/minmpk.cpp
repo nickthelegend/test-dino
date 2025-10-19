@@ -529,3 +529,31 @@ int msgpackAddByteArray(msgPack mPack, const uint8_t* inputArray, const uint16_t
 
   return 0;
 }
+
+
+int msgpackAddBoolean(msgPack mPack, const bool value)
+{
+  uint8_t specifier;
+
+  if (mPack == NULL)
+  {
+    return MPK_ERR_NULL_MPACK;
+  }
+  if (mPack->msgBuffer == NULL)
+  {
+    return MPK_ERR_NULL_INTERNAL_BUFFER;
+  }
+  if (mPack->currentPosition + 1 >= mPack->bufferLen)
+  {
+    return MPK_ERR_BUFFER_TOO_SHORT;
+  }
+
+  // Use MessagePack boolean encoding: 0xC2 for false, 0xC3 for true
+  // https://github.com/msgpack/msgpack/blob/master/spec.md#bool-format-family
+  specifier = value ? 0xC3 : 0xC2;
+  mPack->msgBuffer[mPack->currentPosition++] = specifier;
+
+  mPack->currentMsgLen += 1;
+
+  return 0;
+}

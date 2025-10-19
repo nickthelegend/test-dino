@@ -4094,7 +4094,7 @@ int AlgoIoT::prepareAssetFreezeMessagePack(msgPack msgPackTx,
     return 5;
   }
   // afrz value (boolean)
-  iErr = msgpackAddUInt7(msgPackTx, freeze ? 1 : 0);
+  iErr = msgpackAddBoolean(msgPackTx, freeze);
   if (iErr)
   {
     #ifdef LIB_DEBUGMODE

@@ -102,6 +102,9 @@ int msgpackAddShortByteArray(msgPack mPack, const uint8_t* inputArray, const uin
 // Returns error code (0 = OK)
 int msgpackAddByteArray(msgPack mPack, const uint8_t* inputArray, const uint16_t inputBytes);
 
+// Returns error code (0 = OK)
+int msgpackAddBoolean(msgPack mPack, const bool value);
+
 
 
 #endif
