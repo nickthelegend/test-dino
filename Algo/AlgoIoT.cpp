@@ -4681,35 +4681,70 @@ int AlgoIoT::submitAssetClawbackToAlgorand(uint64_t assetId, const char* fromAdd
     return ALGOIOT_NETWORK_ERROR;
   }
 
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.printf("\nPreparing asset clawback transaction for asset ID: %llu\n", assetId);
+  DEBUG_SERIAL.printf("Amount: %llu, First valid round: %u, Fee: %u\n", amount, fv, fee);
+  #endif
+
   msgPackTx = msgpackInit(&(transactionMessagePackBuffer[0]), ALGORAND_MAX_TX_MSGPACK_SIZE);
   if (msgPackTx == NULL)  
   {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.println("\n Error initializing transaction MessagePack\n");
+    #endif
     return ALGOIOT_MESSAGEPACK_ERROR;
   }  
   
   iErr = prepareAssetClawbackMessagePack(msgPackTx, fv, fee, assetId, fromAddress, toAddress, amount);
   if (iErr)
   {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d preparing asset clawback MessagePack\n", iErr);
+    #endif
     return ALGOIOT_MESSAGEPACK_ERROR;
   }
+
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nUnsigned MessagePack content:");
+  debugPrintMessagePack(msgPackTx);
+  #endif
 
   iErr = signMessagePackAddingPrefix(msgPackTx, &(signature[0]));
   if (iErr)
   {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d signing MessagePack\n", iErr);
+    #endif
     return ALGOIOT_SIGNATURE_ERROR;
   }
 
   iErr = createSignedBinaryTransaction(msgPackTx, signature);
   if (iErr)
   {
+    #ifdef LIB_DEBUGMODE
+    DEBUG_SERIAL.printf("\n Error %d creating signed binary transaction\n", iErr);
+    #endif
     return ALGOIOT_INTERNAL_GENERIC_ERROR;
   }
+
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.println("\nSigned MessagePack content:");
+  debugPrintMessagePack(msgPackTx);
+  
+  DEBUG_SERIAL.println("\nReady to submit asset clawback transaction to Algorand network");
+  printTransactionData(msgPackTx);
+  #endif
 
   iErr = submitTransaction(msgPackTx);
   if (iErr != 200)
   {
     return ALGOIOT_TRANSACTION_ERROR;
   }
+  
+  #ifdef LIB_DEBUGMODE
+  DEBUG_SERIAL.print("\t Asset clawback transaction successfully submitted with ID=");
+  DEBUG_SERIAL.println(getTransactionID());
+  #endif
   
   return ALGOIOT_NO_ERROR;
 }

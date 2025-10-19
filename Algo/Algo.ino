@@ -594,9 +594,9 @@ int submitAssetClawback()
 {
   if((g_wifiMulti.run() == WL_CONNECTED))
   {
-    const char* fromAddress = "4RLXQGPZVVRSXQF4VKZ74I6BCUD7TUVROOUBCVRKY37LQSHXORZV4KCAP4";
-    const char* toAddress = "64F65LSXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKXKX";
-    uint64_t amount = 1;
+    const char* fromAddress = "QC7XT7QU7X6IHNRJZBR67RBMKCAPH67PCSX4LYH4QKVSQ7DQZ32PG5HSVQ";
+    const char* toAddress = "EW64GC6F24M7NDSC5R3ES4YUVE3ZXXNMARJHDCCCLIHZU6TBEOC7XRSBG4";
+    uint64_t amount = 500000;
     
     int iErr = g_algoIoT.submitAssetClawbackToAlgorand(ASSET_ID_FOR_CLAWBACK, fromAddress, toAddress, amount);
     if (!iErr) {
