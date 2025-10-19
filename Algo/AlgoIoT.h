@@ -223,7 +223,8 @@ class AlgoIoT
     const uint32_t lastRound, 
     const uint16_t fee,
     const uint64_t applicationId,
-    const char** appArgs = NULL,
+    const uint8_t** appArgs = NULL,
+    const uint8_t* appArgLengths = NULL,
     uint8_t appArgsCount = 0,
     const uint64_t* foreignAssets = NULL,
     uint8_t foreignAssetsCount = 0,
@@ -364,7 +365,7 @@ class AlgoIoT
   // Return: error code (0 = OK)
   int submitApplicationNoOpToAlgorand(
     uint64_t applicationId,
-    const char** appArgs = NULL, uint8_t appArgsCount = 0,
+    const uint8_t** appArgs = NULL, const uint8_t* appArgLengths = NULL, uint8_t appArgsCount = 0,
     const uint64_t* foreignAssets = NULL, uint8_t foreignAssetsCount = 0,
     const uint64_t* foreignApps = NULL, uint8_t foreignAppsCount = 0,
     const char** accounts = NULL, uint8_t accountsCount = 0);

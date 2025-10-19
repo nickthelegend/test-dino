@@ -105,6 +105,10 @@ int msgpackAddByteArray(msgPack mPack, const uint8_t* inputArray, const uint16_t
 // Returns error code (0 = OK)
 int msgpackAddBoolean(msgPack mPack, const bool value);
 
+// "elements" max value = 15
+// Returns error code (0 = OK)
+int msgpackAddShortArray(msgPack mPack, const uint8_t elements);
+
 
 
 #endif

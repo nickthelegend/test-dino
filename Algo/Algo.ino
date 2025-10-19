@@ -580,7 +580,18 @@ int submitApplicationNoOp()
 {
   if((g_wifiMulti.run() == WL_CONNECTED)) 
   {
-    int iErr = g_algoIoT.submitApplicationNoOpToAlgorand(APPLICATION_ID_FOR_NOOP);
+    // Create binary arguments
+    uint8_t arg1[] = {115,101,116,117,112,83,97,108,101}; // "setupSale"
+    uint8_t arg2[] = {0,0,0,0,0,0,0,123}; // uint64(123)
+    const uint8_t* appArgs[] = {arg1, arg2};
+    uint8_t appArgLengths[] = {9, 8};
+    uint64_t foreignAssets[] = {168103};
+    
+    int iErr = g_algoIoT.submitApplicationNoOpToAlgorand(
+      168103, // Use same ID as asset
+      appArgs, appArgLengths, 2,
+      foreignAssets, 1
+    );
     if (!iErr) {
       DEBUG_SERIAL.printf("TX ID: %s\n", g_algoIoT.getTransactionID());
     }

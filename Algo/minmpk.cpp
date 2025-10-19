@@ -557,3 +557,33 @@ int msgpackAddBoolean(msgPack mPack, const bool value)
 
   return 0;
 }
+
+
+int msgpackAddShortArray(msgPack mPack, const uint8_t nElements)
+{
+  uint8_t specifier = 0;
+
+  if (mPack == NULL)
+  {
+    return MPK_ERR_NULL_MPACK;
+  }
+  if (mPack->msgBuffer == NULL)
+  {
+    return MPK_ERR_NULL_INTERNAL_BUFFER;
+  }
+  if (nElements > 15)
+  {
+    return MPK_ERR_BAD_PARAM;
+  }
+  if (mPack->currentPosition + 1 >= mPack->bufferLen)
+  {
+    return MPK_ERR_BUFFER_TOO_SHORT;
+  }
+
+  // FixArray specifier = 1001xxxx where xxxx are 4 bits keeping the number of elements
+  specifier = 144 + nElements; // 10010000 + 4-bit totalElements
+  mPack->msgBuffer[mPack->currentPosition++] = specifier;
+  mPack->currentMsgLen++;
+  
+  return 0;
+}

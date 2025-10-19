@@ -2958,7 +2958,8 @@ int AlgoIoT::prepareAssetCreationMessagePack(
 // Return: error code (0 = OK)
 int AlgoIoT::submitApplicationNoOpToAlgorand(
     uint64_t applicationId,
-    const char** appArgs,
+    const uint8_t** appArgs,
+    const uint8_t* appArgLengths,
     uint8_t appArgsCount,
     const uint64_t* foreignAssets,
     uint8_t foreignAssetsCount,
@@ -3008,7 +3009,7 @@ int AlgoIoT::submitApplicationNoOpToAlgorand(
   }  
   
   iErr = prepareApplicationNoOpMessagePack(msgPackTx, fv, fee, applicationId, 
-                                         appArgs, appArgsCount,
+                                         appArgs, appArgLengths, appArgsCount,
                                          foreignAssets, foreignAssetsCount,
                                          foreignApps, foreignAppsCount,
                                          accounts, accountsCount);
@@ -3095,7 +3096,8 @@ int AlgoIoT::prepareApplicationNoOpMessagePack(
     const uint32_t lastRound, 
     const uint16_t fee,
     const uint64_t applicationId,
-    const char** appArgs,
+    const uint8_t** appArgs,
+    const uint8_t* appArgLengths,
     uint8_t appArgsCount,
     const uint64_t* foreignAssets,
     uint8_t foreignAssetsCount,
@@ -3179,60 +3181,26 @@ int AlgoIoT::prepareApplicationNoOpMessagePack(
     return 5;
   }
 
-  // Fields must follow alphabetical order
-
-  // "apid" label (Application ID)
-  iErr = msgpackAddShortString(msgPackTx, "apid");
-  if (iErr)
-  {
-    #ifdef LIB_DEBUGMODE
-    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apid label\n\n", iErr);
-    #endif
-    return 5;
-  }
-  
-  // apid value - Use UInt32 for application IDs that fit in 32 bits to match Algo SDK encoding
-  #ifdef LIB_DEBUGMODE
-  DEBUG_SERIAL.printf("\nAdding application ID: %llu\n", applicationId);
-  #endif
-  
-  // Check if the application ID fits in a uint32
-  if (applicationId <= 0xFFFFFFFF) {
-    iErr = msgpackAddUInt32(msgPackTx, (uint32_t)applicationId);
-  } else {
-    iErr = msgpackAddUInt64(msgPackTx, applicationId);
-  }
-  
-  if (iErr)
-  {
-    #ifdef LIB_DEBUGMODE
-    DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apid value\n\n", iErr);
-    #endif
-    return 5;
-  }
+  // Fields must follow alphabetical order: apaa, apas, apid, fee, fv, gen, gh, lv, snd, type
 
   // "apaa" label (Application Arguments) - optional
   if (appArgsCount > 0) {
     iErr = msgpackAddShortString(msgPackTx, "apaa");
-    if (iErr)
-    {
-      #ifdef LIB_DEBUGMODE
-      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apaa label\n\n", iErr);
-      #endif
-      return 5;
-    }
+    if (iErr) return 5;
     
-    // For now, we'll add just the first argument as a simple byte array
-    // TODO: Implement proper array support in MessagePack library
-    if (appArgs[0] != NULL) {
-      // Convert string to byte array
-      iErr = msgpackAddShortByteArray(msgPackTx, (const uint8_t*)appArgs[0], (const uint8_t)strlen(appArgs[0]));
-      if (iErr)
-      {
-        #ifdef LIB_DEBUGMODE
-        DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apaa[0]\n\n", iErr);
-        #endif
-        return 5;
+    // Add array with appArgsCount elements
+    if (appArgsCount <= 15) {
+      iErr = msgpackAddShortArray(msgPackTx, appArgsCount);
+    } else {
+      return 5; // Too many args for this implementation
+    }
+    if (iErr) return 5;
+    
+    // Add each argument as byte array
+    for (uint8_t i = 0; i < appArgsCount; i++) {
+      if (appArgs[i] != NULL && appArgLengths[i] > 0) {
+        iErr = msgpackAddShortByteArray(msgPackTx, appArgs[i], appArgLengths[i]);
+        if (iErr) return 5;
       }
     }
   }
@@ -3277,27 +3245,24 @@ int AlgoIoT::prepareApplicationNoOpMessagePack(
   // "apas" label (Foreign Assets) - optional
   if (foreignAssetsCount > 0) {
     iErr = msgpackAddShortString(msgPackTx, "apas");
-    if (iErr)
-    {
-      #ifdef LIB_DEBUGMODE
-      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apas label\n\n", iErr);
-      #endif
-      return 5;
-    }
+    if (iErr) return 5;
     
-    // For now, we'll add just the first foreign asset as a simple integer
-    // TODO: Implement proper array support in MessagePack library
-    if (foreignAssets[0] <= 0xFFFFFFFF) {
-      iErr = msgpackAddUInt32(msgPackTx, (uint32_t)foreignAssets[0]);
+    // Add array with foreignAssetsCount elements
+    if (foreignAssetsCount <= 15) {
+      iErr = msgpackAddShortArray(msgPackTx, foreignAssetsCount);
     } else {
-      iErr = msgpackAddUInt64(msgPackTx, foreignAssets[0]);
-    }
-    if (iErr)
-    {
-      #ifdef LIB_DEBUGMODE
-      DEBUG_SERIAL.printf("\n prepareApplicationNoOpMessagePack(): ERROR %d adding apas[0]\n\n", iErr);
-      #endif
       return 5;
+    }
+    if (iErr) return 5;
+    
+    // Add each foreign asset ID
+    for (uint8_t i = 0; i < foreignAssetsCount; i++) {
+      if (foreignAssets[i] <= 0xFFFFFFFF) {
+        iErr = msgpackAddUInt32(msgPackTx, (uint32_t)foreignAssets[i]);
+      } else {
+        iErr = msgpackAddUInt64(msgPackTx, foreignAssets[i]);
+      }
+      if (iErr) return 5;
     }
   }
 
@@ -3327,6 +3292,18 @@ int AlgoIoT::prepareApplicationNoOpMessagePack(
       return 5;
     }
   }
+
+  // "apid" label (Application ID)
+  iErr = msgpackAddShortString(msgPackTx, "apid");
+  if (iErr) return 5;
+  
+  // apid value
+  if (applicationId <= 0xFFFFFFFF) {
+    iErr = msgpackAddUInt32(msgPackTx, (uint32_t)applicationId);
+  } else {
+    iErr = msgpackAddUInt64(msgPackTx, applicationId);
+  }
+  if (iErr) return 5;
 
   // "fee" label
   iErr = msgpackAddShortString(msgPackTx, "fee");
